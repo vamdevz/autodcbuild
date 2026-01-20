@@ -8,6 +8,11 @@ on:
         required: true
         type: string
         default: "20.50.126.169"
+      admin_username:
+        description: "Local admin username on target VM"
+        required: false
+        type: string
+        default: "azureuser"
       skip_validation:
         description: "Skip pre-promotion checks"
         required: false
@@ -19,6 +24,11 @@ on:
         description: "Target DC IP or hostname"
         required: true
         type: string
+      admin_username:
+        description: "Local admin username on target VM"
+        required: false
+        type: string
+        default: "azureuser"
       skip_validation:
         description: "Skip pre-promotion checks"
         required: false
@@ -71,6 +81,8 @@ jobs:
       - name: Promote to Domain Controller
         shell: pwsh
         env:
+          LOCAL_ADMIN_USER: ${{ inputs.admin_username || 'azureuser' }}
+          LOCAL_ADMIN_PASS: ${{ secrets.DOMAIN_ADMIN_PASSWORD }}
           DOMAIN_ADMIN_USER: ${{ secrets.DOMAIN_ADMIN_USERNAME }}
           DOMAIN_ADMIN_PASS: ${{ secrets.DOMAIN_ADMIN_PASSWORD }}
           SAFE_MODE_PASS: ${{ secrets.SAFE_MODE_PASSWORD }}
@@ -82,29 +94,35 @@ jobs:
           Write-Host "Target: ${{ inputs.target_dc }}" -ForegroundColor Yellow
           Write-Host ""
 
-          $securePassword = ConvertTo-SecureString $env:DOMAIN_ADMIN_PASS -AsPlainText -Force
-          $credential = New-Object System.Management.Automation.PSCredential($env:DOMAIN_ADMIN_USER, $securePassword)
+          # Use LOCAL admin to connect to non-domain VM
+          $localPassword = ConvertTo-SecureString $env:LOCAL_ADMIN_PASS -AsPlainText -Force
+          $localCredential = New-Object System.Management.Automation.PSCredential($env:LOCAL_ADMIN_USER, $localPassword)
+          
+          # Domain credentials for joining domain
+          $domainPassword = ConvertTo-SecureString $env:DOMAIN_ADMIN_PASS -AsPlainText -Force
+          $domainCredential = New-Object System.Management.Automation.PSCredential($env:DOMAIN_ADMIN_USER, $domainPassword)
+          
           $safeModePassword = ConvertTo-SecureString $env:SAFE_MODE_PASS -AsPlainText -Force
 
           try {
-            Write-Host "📡 Creating remote PowerShell session..." -ForegroundColor Cyan
-            $session = New-PSSession -ComputerName "${{ inputs.target_dc }}" -Credential $credential -SessionOption (New-PSSessionOption -SkipCACheck -SkipCNCheck)
+            Write-Host "📡 Creating remote PowerShell session (using local admin)..." -ForegroundColor Cyan
+            $session = New-PSSession -ComputerName "${{ inputs.target_dc }}" -Credential $localCredential -SessionOption (New-PSSessionOption -SkipCACheck -SkipCNCheck)
             Write-Host "✅ Session established" -ForegroundColor Green
             Write-Host ""
 
             Write-Host "📦 Installing AD DS Role..." -ForegroundColor Cyan
-            Invoke-Command -Session $session -ScriptBlock {
+            $roleResult = Invoke-Command -Session $session -ScriptBlock {
               $result = Install-WindowsFeature -Name AD-Domain-Services -IncludeManagementTools
               return $result.Success
             }
-            Write-Host "✅ AD DS Role installed" -ForegroundColor Green
+            Write-Host "✅ AD DS Role installed (Success: $roleResult)" -ForegroundColor Green
             Write-Host ""
 
             Write-Host "🚀 Adding DC to existing domain (linkedin.local)..." -ForegroundColor Cyan
             Write-Host "⏳ This will take 10-15 minutes..." -ForegroundColor Yellow
             Write-Host ""
             
-            $result = Invoke-Command -Session $session -ArgumentList $safeModePassword, $credential -ScriptBlock {
+            $result = Invoke-Command -Session $session -ArgumentList $safeModePassword, $domainCredential -ScriptBlock {
               param($SafeModePwd, $DomainCred)
               Install-ADDSDomainController `
                 -DomainName "linkedin.local" `
