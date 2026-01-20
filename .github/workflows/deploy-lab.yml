@@ -155,11 +155,14 @@ jobs:
             $safeModeSecure = ConvertTo-SecureString $SafePass -AsPlainText -Force
             
             Write-Host "Starting DC promotion with user: linkedin.local\vamdev" -ForegroundColor Cyan
+            Write-Host "Replication source: DC01.linkedin.local" -ForegroundColor Yellow
             Write-Host ""
             
             Install-ADDSDomainController `
               -DomainName "linkedin.local" `
               -Credential $domainCred `
+              -ReplicationSourceDC "DC01.linkedin.local" `
+              -SiteName "Default-First-Site-Name" `
               -InstallDns:$true `
               -SafeModeAdministratorPassword $safeModeSecure `
               -Force:$true `
