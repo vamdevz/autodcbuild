@@ -3,9 +3,14 @@ name: Deploy to Lab (Simplified)
 on:
   workflow_dispatch:
     inputs:
-      target_dc:
-        description: "Target DC IP or hostname"
+      vm_name:
+        description: "Target VM name"
         required: true
+        type: string
+        default: "TestVM1300"
+      target_dc:
+        description: "Target DC IP (for reference)"
+        required: false
         type: string
         default: "20.50.126.169"
       admin_username:
@@ -20,9 +25,13 @@ on:
         default: false
   workflow_call:
     inputs:
-      target_dc:
-        description: "Target DC IP or hostname"
+      vm_name:
+        description: "Target VM name"
         required: true
+        type: string
+      target_dc:
+        description: "Target DC IP (for reference)"
+        required: false
         type: string
       admin_username:
         description: "Local admin username on target VM"
@@ -55,30 +64,10 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Get VM Name
-        id: vm_info
-        shell: bash
-        run: |
-          VM_NAME=$(az vm list --resource-group VAMDEVTEST --query "[?privateIps=='${{ inputs.target_dc }}' || publicIps=='${{ inputs.target_dc }}'].name" -o tsv)
-          if [ -z "$VM_NAME" ]; then
-            # Try to find by IP in network interfaces
-            VM_NAME=$(az network nic list --resource-group VAMDEVTEST --query "[?ipConfigurations[0].privateIpAddress=='${{ inputs.target_dc }}'].{vm:virtualMachine.id}" -o tsv | xargs basename 2>/dev/null || echo "")
-          fi
-          
-          if [ -z "$VM_NAME" ]; then
-            echo "Cannot find VM with IP ${{ inputs.target_dc }}"
-            echo "Available VMs:"
-            az vm list -d --resource-group VAMDEVTEST --query "[].{Name:name, IP:publicIps}" -o table
-            exit 1
-          fi
-          
-          echo "vm_name=$VM_NAME" >> "$GITHUB_OUTPUT"
-          echo "Found VM: $VM_NAME"
-
       - name: Install AD DS Role
         shell: bash
         env:
-          VM_NAME: ${{ steps.vm_info.outputs.vm_name }}
+          VM_NAME: ${{ inputs.vm_name }}
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "  Installing AD DS Role on $VM_NAME"
@@ -105,7 +94,7 @@ jobs:
       - name: Promote to Domain Controller
         shell: bash
         env:
-          VM_NAME: ${{ steps.vm_info.outputs.vm_name }}
+          VM_NAME: ${{ inputs.vm_name }}
           DOMAIN_ADMIN_USER: ${{ secrets.DOMAIN_ADMIN_USERNAME }}
           DOMAIN_ADMIN_PASS: ${{ secrets.DOMAIN_ADMIN_PASSWORD }}
           SAFE_MODE_PASS: ${{ secrets.SAFE_MODE_PASSWORD }}
