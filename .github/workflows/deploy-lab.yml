@@ -206,18 +206,19 @@ jobs:
           echo ""
           
           # Check for success (must appear BEFORE checking for errors)
-          if echo "$OUTPUT_MSG" | grep -q "✅ DC PROMOTION COMPLETED"; then
-            echo "✅✅✅ DC PROMOTION SUCCESSFUL! ✅✅✅"
-            echo ""
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "  ✅ TestVM1300 ADDED TO linkedin.local"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          # Look for "DC PROMOTION COMPLETED" OR "Operation completed successfully" (don't rely on emojis due to encoding issues)
+          if echo "$OUTPUT_MSG" | grep -qi "DC PROMOTION COMPLETED\|Operation completed successfully.*Success"; then
+            echo "==================================="
+            echo "  DC PROMOTION SUCCESSFUL!"
+            echo "==================================="
             echo ""
             echo "Domain: linkedin.local"
             echo "New DC: $VM_NAME"
             echo ""
-          elif echo "$OUTPUT_MSG" | grep -qi "❌ DC PROMOTION ERROR\|The operation failed\|Cannot complete"; then
-            echo "❌❌❌ DC PROMOTION FAILED! ❌❌❌"
+          elif echo "$OUTPUT_MSG" | grep -qi "DC PROMOTION ERROR\|The operation failed\|Cannot complete"; then
+            echo "==================================="
+            echo "  DC PROMOTION FAILED!"
+            echo "==================================="
             echo ""
             echo "Error found in output above"
             exit 1
