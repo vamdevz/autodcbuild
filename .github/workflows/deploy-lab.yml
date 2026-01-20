@@ -92,6 +92,27 @@ jobs:
             exit 1
           fi
 
+      - name: Configure DNS
+        shell: bash
+        env:
+          VM_NAME: ${{ inputs.vm_name }}
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  Configuring DNS on $VM_NAME"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "Setting DNS to point to DC01 (10.0.0.6)..."
+          
+          az vm run-command invoke \
+            --resource-group VAMDEVTEST \
+            --name "$VM_NAME" \
+            --command-id RunPowerShellScript \
+            --scripts "Set-DnsClientServerAddress -InterfaceAlias 'Ethernet*' -ServerAddresses 10.0.0.6,8.8.8.8; Get-DnsClientServerAddress -InterfaceAlias 'Ethernet*' | Format-Table" \
+            -o json | jq -r '.value[0].message'
+          
+          echo "✅ DNS configured to use DC01 as primary DNS"
+          echo ""
+
       - name: Promote to Domain Controller
         shell: bash
         env:
