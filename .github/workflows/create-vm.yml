@@ -91,6 +91,7 @@ jobs:
           az network public-ip create \
             --resource-group "$RG" \
             --name "$PIP_NAME" \
+            --location "$LOCATION" \
             --sku Standard \
             --allocation-method Static \
             --only-show-errors
@@ -99,6 +100,7 @@ jobs:
           az network nic create \
             --resource-group "$RG" \
             --name "$NIC_NAME" \
+            --location "$LOCATION" \
             --vnet-name "$VNET" \
             --subnet "$SUBNET" \
             --network-security-group "$NSG_NAME" \
