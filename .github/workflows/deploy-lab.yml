@@ -32,8 +32,8 @@ jobs:
           Import-Module PSWSMan -Force -ErrorAction Stop
           Get-Module PSWSMan
 
-          Write-Host "Installing WSMan client..." -ForegroundColor Cyan
-          sudo $(which pwsh) -Command 'Import-Module PSWSMan -Force; Install-WSMan'
+          Write-Host "Installing WSMan client (needs root)..." -ForegroundColor Cyan
+          sudo $(which pwsh) -Command 'Install-Module -Name PSWSMan -Force -AllowClobber; Import-Module PSWSMan; Install-WSMan'
 
           Write-Host "✅ PowerShell modules installed successfully" -ForegroundColor Green
 
