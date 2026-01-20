@@ -12,6 +12,24 @@ on:
         required: false
         type: string
         default: "azureuser"
+  workflow_call:
+    inputs:
+      vm_name:
+        description: "Name for the new Windows Server VM"
+        required: true
+        type: string
+      admin_username:
+        description: "Local admin username for the VM"
+        required: false
+        type: string
+        default: "azureuser"
+    outputs:
+      vm_name:
+        description: "Created VM name"
+        value: ${{ jobs.create-vm.outputs.vm_name }}
+      vm_ip:
+        description: "Created VM public IP"
+        value: ${{ jobs.create-vm.outputs.vm_ip }}
 
 jobs:
   create-vm:
