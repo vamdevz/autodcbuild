@@ -75,15 +75,61 @@ jobs:
     needs: create-vm
     runs-on: ubuntu-latest
     steps:
+      - name: Display VM details
+        run: |
+          echo "==================================="
+          echo "  VM Created Successfully"
+          echo "==================================="
+          echo "VM Name: ${{ needs.create-vm.outputs.vm_name }}"
+          echo "VM IP: ${{ needs.create-vm.outputs.vm_ip }}"
+          echo ""
+          echo "Now triggering DC promotion..."
+          
       - name: Trigger DC promotion
+        id: trigger
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ -z "${{ needs.create-vm.outputs.vm_ip }}" ]; then
-            echo "VM IP is missing. Cannot trigger DC promotion."
+          if [ -z "${{ needs.create-vm.outputs.vm_name }}" ]; then
+            echo "ERROR: VM name is missing. Cannot trigger DC promotion."
             exit 1
           fi
+          
+          echo "Triggering DC promotion for ${{ needs.create-vm.outputs.vm_name }}..."
           gh workflow run deploy-lab.yml \
             --repo "${{ github.repository }}" \
+            -f vm_name="${{ needs.create-vm.outputs.vm_name }}" \
             -f target_dc="${{ needs.create-vm.outputs.vm_ip }}" \
+            -f admin_username="${{ inputs.admin_username }}" \
             -f skip_validation="${{ inputs.skip_validation }}"
+          
+          echo "DC promotion workflow triggered successfully!"
+          
+      - name: Wait for DC promotion to start
+        run: |
+          echo "Waiting 10 seconds for workflow to start..."
+          sleep 10
+          
+      - name: Monitor DC promotion
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "Monitoring DC promotion workflow..."
+          echo ""
+          
+          RUN_ID="$(gh run list --workflow=deploy-lab.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
+          echo "DC Promotion Run ID: $RUN_ID"
+          echo "URL: https://github.com/${{ github.repository }}/actions/runs/$RUN_ID"
+          echo ""
+          
+          echo "Watching workflow (this may take 10-15 minutes for DC promotion)..."
+          gh run watch "$RUN_ID" --exit-status
+          
+          echo ""
+          echo "==================================="
+          echo "  DC Promotion Completed!"
+          echo "==================================="
+          echo "VM: ${{ needs.create-vm.outputs.vm_name }}"
+          echo "Domain: linkedin.local"
+          echo ""
