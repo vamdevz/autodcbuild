@@ -166,9 +166,7 @@ jobs:
               -InstallDns:$true `
               -CreateDnsDelegation:$false `
               -SafeModeAdministratorPassword $safeModeSecure `
-              -NoRebootOnCompletion:$false `
-              -Confirm:$false `
-              -ErrorAction Stop
+              -NoRebootOnCompletion:$false
               
             Write-Host "✅ DC PROMOTION COMPLETED" -ForegroundColor Green
             
