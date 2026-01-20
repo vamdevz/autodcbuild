@@ -84,10 +84,11 @@ jobs:
           
           echo "$RESULT" | jq -r '.value[0].message'
           
-          if echo "$RESULT" | grep -q '"Success":true\|"Success": true'; then
+          EXIT_CODE=$(echo "$RESULT" | jq -r '.value[0].code')
+          if [ "$EXIT_CODE" = "ComponentStatus/StdOut/succeeded" ]; then
             echo "✅ AD DS Role installed successfully"
           else
-            echo "❌ AD DS Role installation failed"
+            echo "❌ AD DS Role installation failed (code: $EXIT_CODE)"
             exit 1
           fi
 
