@@ -50,115 +50,129 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install PowerShell modules
-        shell: pwsh
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Get VM Name
+        id: vm_info
+        shell: bash
         run: |
-          Write-Host "📦 Installing PSWSMan for cross-platform WinRM..." -ForegroundColor Cyan
-          Install-Module -Name PSWSMan -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
+          VM_NAME=$(az vm list --resource-group VAMDEVTEST --query "[?privateIps=='${{ inputs.target_dc }}' || publicIps=='${{ inputs.target_dc }}'].name" -o tsv)
+          if [ -z "$VM_NAME" ]; then
+            # Try to find by IP in network interfaces
+            VM_NAME=$(az network nic list --resource-group VAMDEVTEST --query "[?ipConfigurations[0].privateIpAddress=='${{ inputs.target_dc }}'].{vm:virtualMachine.id}" -o tsv | xargs basename 2>/dev/null || echo "")
+          fi
           
-          Write-Host "📦 Verifying PSWSMan..." -ForegroundColor Cyan
-          Import-Module PSWSMan -Force -ErrorAction Stop
-          Get-Module PSWSMan
-
-          Write-Host "🔧 Installing WSMan client (needs root)..." -ForegroundColor Cyan
-          sudo $(which pwsh) -Command 'Install-Module -Name PSWSMan -Force -AllowClobber; Import-Module PSWSMan; Install-WSMan'
-
-          Write-Host "✅ PowerShell modules installed" -ForegroundColor Green
-
-      - name: Test connectivity
-        shell: pwsh
-        run: |
-          Write-Host "🔍 Testing connectivity to ${{ inputs.target_dc }}..." -ForegroundColor Cyan
-          
-          try {
-            Test-Connection -TargetName "${{ inputs.target_dc }}" -TCPPort 5985 -Count 1 -ErrorAction Stop
-            Write-Host "✅ WinRM port 5985 is reachable" -ForegroundColor Green
-          } catch {
-            Write-Host "❌ Cannot reach WinRM port 5985" -ForegroundColor Red
+          if [ -z "$VM_NAME" ]; then
+            echo "Cannot find VM with IP ${{ inputs.target_dc }}"
+            echo "Available VMs:"
+            az vm list -d --resource-group VAMDEVTEST --query "[].{Name:name, IP:publicIps}" -o table
             exit 1
-          }
+          fi
+          
+          echo "vm_name=$VM_NAME" >> "$GITHUB_OUTPUT"
+          echo "Found VM: $VM_NAME"
+
+      - name: Install AD DS Role
+        shell: bash
+        env:
+          VM_NAME: ${{ steps.vm_info.outputs.vm_name }}
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  Installing AD DS Role on $VM_NAME"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          
+          echo "📦 Installing AD-Domain-Services..."
+          RESULT=$(az vm run-command invoke \
+            --resource-group VAMDEVTEST \
+            --name "$VM_NAME" \
+            --command-id RunPowerShellScript \
+            --scripts "Install-WindowsFeature -Name AD-Domain-Services -IncludeManagementTools | ConvertTo-Json" \
+            -o json)
+          
+          echo "$RESULT" | jq -r '.value[0].message'
+          
+          if echo "$RESULT" | grep -q '"Success":true\|"Success": true'; then
+            echo "✅ AD DS Role installed successfully"
+          else
+            echo "❌ AD DS Role installation failed"
+            exit 1
+          fi
 
       - name: Promote to Domain Controller
-        shell: pwsh
+        shell: bash
         env:
-          LOCAL_ADMIN_USER: ${{ inputs.admin_username || 'azureuser' }}
-          LOCAL_ADMIN_PASS: ${{ secrets.DOMAIN_ADMIN_PASSWORD }}
+          VM_NAME: ${{ steps.vm_info.outputs.vm_name }}
           DOMAIN_ADMIN_USER: ${{ secrets.DOMAIN_ADMIN_USERNAME }}
           DOMAIN_ADMIN_PASS: ${{ secrets.DOMAIN_ADMIN_PASSWORD }}
           SAFE_MODE_PASS: ${{ secrets.SAFE_MODE_PASSWORD }}
         run: |
-          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
-          Write-Host "  DC Promotion - linkedin.local" -ForegroundColor Cyan
-          Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
-          Write-Host ""
-          Write-Host "Target: ${{ inputs.target_dc }}" -ForegroundColor Yellow
-          Write-Host ""
-
-          # Use LOCAL admin to connect to non-domain VM
-          $localPassword = ConvertTo-SecureString $env:LOCAL_ADMIN_PASS -AsPlainText -Force
-          $localCredential = New-Object System.Management.Automation.PSCredential($env:LOCAL_ADMIN_USER, $localPassword)
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  Promoting $VM_NAME to Domain Controller"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "🚀 Adding to domain: linkedin.local"
+          echo "⏳ This will take 10-15 minutes..."
+          echo ""
           
-          # Domain credentials for joining domain
-          $domainPassword = ConvertTo-SecureString $env:DOMAIN_ADMIN_PASS -AsPlainText -Force
-          $domainCredential = New-Object System.Management.Automation.PSCredential($env:DOMAIN_ADMIN_USER, $domainPassword)
+          # Create PowerShell script for DC promotion
+          cat > /tmp/promote-dc.ps1 << 'EOFPS1'
+          param($DomainUser, $DomainPass, $SafePass)
           
-          $safeModePassword = ConvertTo-SecureString $env:SAFE_MODE_PASS -AsPlainText -Force
-
           try {
-            Write-Host "📡 Creating remote PowerShell session (using local admin)..." -ForegroundColor Cyan
-            $session = New-PSSession -ComputerName "${{ inputs.target_dc }}" -Credential $localCredential -SessionOption (New-PSSessionOption -SkipCACheck -SkipCNCheck)
-            Write-Host "✅ Session established" -ForegroundColor Green
-            Write-Host ""
-
-            Write-Host "📦 Installing AD DS Role..." -ForegroundColor Cyan
-            $roleResult = Invoke-Command -Session $session -ScriptBlock {
-              $result = Install-WindowsFeature -Name AD-Domain-Services -IncludeManagementTools
-              return $result.Success
-            }
-            Write-Host "✅ AD DS Role installed (Success: $roleResult)" -ForegroundColor Green
-            Write-Host ""
-
-            Write-Host "🚀 Adding DC to existing domain (linkedin.local)..." -ForegroundColor Cyan
-            Write-Host "⏳ This will take 10-15 minutes..." -ForegroundColor Yellow
-            Write-Host ""
+            $domainSecure = ConvertTo-SecureString $DomainPass -AsPlainText -Force
+            $domainCred = New-Object System.Management.Automation.PSCredential($DomainUser, $domainSecure)
             
-            $result = Invoke-Command -Session $session -ArgumentList $safeModePassword, $domainCredential -ScriptBlock {
-              param($SafeModePwd, $DomainCred)
-              Install-ADDSDomainController `
-                -DomainName "linkedin.local" `
-                -Credential $DomainCred `
-                -InstallDns:$true `
-                -SafeModeAdministratorPassword $SafeModePwd `
-                -Force:$true `
-                -NoRebootOnCompletion:$false `
-                -Confirm:$false
-            }
+            $safeModeSecure = ConvertTo-SecureString $SafePass -AsPlainText -Force
             
-            if ($result) {
-              Write-Host "✅ DC promotion command executed successfully" -ForegroundColor Green
-            }
-
-            Write-Host ""
-            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
-            Write-Host "  ✅ DC PROMOTION INITIATED!" -ForegroundColor Green
-            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
-            Write-Host ""
-            Write-Host "Server is rebooting and completing promotion..." -ForegroundColor Yellow
-            Write-Host "Domain: linkedin.local" -ForegroundColor White
-            Write-Host "DC: ${{ inputs.target_dc }}" -ForegroundColor White
-            Write-Host ""
-
+            Write-Host "Starting DC promotion..." -ForegroundColor Cyan
+            
+            Install-ADDSDomainController `
+              -DomainName "linkedin.local" `
+              -Credential $domainCred `
+              -InstallDns:$true `
+              -SafeModeAdministratorPassword $safeModeSecure `
+              -Force:$true `
+              -NoRebootOnCompletion:$false `
+              -Confirm:$false
+              
+            Write-Host "DC promotion initiated" -ForegroundColor Green
+            
           } catch {
-            Write-Host ""
-            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-            Write-Host "  ❌ DC PROMOTION FAILED" -ForegroundColor Red
-            Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Red
-            Write-Host ""
-            Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
-            Write-Host ""
-            exit 1
-          } finally {
-            if ($session) {
-              Remove-PSSession -Session $session -ErrorAction SilentlyContinue
-            }
+            Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red
+            throw
           }
+          EOFPS1
+          
+          # Execute via Azure VM Run Command
+          echo "Executing DC promotion script..."
+          RESULT=$(az vm run-command invoke \
+            --resource-group VAMDEVTEST \
+            --name "$VM_NAME" \
+            --command-id RunPowerShellScript \
+            --scripts @/tmp/promote-dc.ps1 \
+            --parameters "DomainUser=$DOMAIN_ADMIN_USER" "DomainPass=$DOMAIN_ADMIN_PASS" "SafePass=$SAFE_MODE_PASS" \
+            -o json)
+          
+          echo ""
+          echo "Output:"
+          echo "$RESULT" | jq -r '.value[0].message'
+          echo ""
+          
+          if echo "$RESULT" | grep -q "DC promotion initiated"; then
+            echo "✅ DC promotion command executed successfully!"
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "  ✅ DC PROMOTION INITIATED!"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "Server is now rebooting and completing promotion..."
+            echo "Domain: linkedin.local"
+            echo "New DC: $VM_NAME"
+          else
+            echo "❌ DC promotion failed - check output above"
+            exit 1
+          fi
