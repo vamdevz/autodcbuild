@@ -1,0 +1,163 @@
+---
+# Master Pipeline Playbook - LinkedIn DC Promotion
+# Orchestrates full DC promotion workflow for linkedin.biz / internal.linkedin.cn
+
+- name: Stage 1 - Pre-Promotion Validation
+  hosts: dc_candidates
+  gather_facts: yes
+  tags: [preflight, validate]
+  
+  pre_tasks:
+    - name: Display target hosts
+      debug:
+        msg: |
+          ============================================
+          LinkedIn DC Promotion Pipeline Starting
+          ============================================
+          Target: {{ inventory_hostname }}
+          Domain: {{ domain_name }}
+          Site: {{ ad_site_name }}
+          ============================================
+    
+    - name: Check if already a DC
+      win_shell: |
+        $cs = Get-WmiObject -Class Win32_ComputerSystem
+        if ($cs.DomainRole -ge 4) {
+          Write-Output "AlreadyDC"
+        } else {
+          Write-Output "NotDC"
+        }
+      register: dc_check
+      changed_when: false
+    
+    - name: Skip if already DC
+      fail:
+        msg: "{{ inventory_hostname }} is already a Domain Controller. Aborting."
+      when: "'AlreadyDC' in dc_check.stdout"
+  
+  roles:
+    - role: pre-promotion-check
+      tags: [preflight]
+
+---
+- name: Stage 2 - DC Promotion (DCPromo)
+  hosts: dc_candidates
+  gather_facts: yes
+  tags: [promote, dcpromo]
+  
+  roles:
+    - role: dc-promotion
+      tags: [promote]
+
+---
+- name: Stage 3 - Reboot and Wait for Services
+  hosts: dc_candidates
+  gather_facts: no
+  tags: [reboot]
+  
+  roles:
+    - role: reboot-handler
+      tags: [reboot]
+
+---
+- name: Stage 4 - DC Health Status Checks
+  hosts: dc_candidates
+  gather_facts: yes
+  tags: [health, validate]
+  
+  roles:
+    - role: dc-health-checks
+      tags: [health]
+
+---
+- name: Stage 5 - Configure DNS Conditional Forwarders
+  hosts: dc_candidates
+  gather_facts: yes
+  tags: [dns, configure]
+  
+  roles:
+    - role: dns-configuration
+      tags: [dns]
+
+---
+- name: Stage 6 - Verify Authentication Events
+  hosts: dc_candidates
+  gather_facts: yes
+  tags: [auth, validate]
+  
+  roles:
+    - role: authentication-check
+      tags: [auth]
+
+---
+- name: Stage 7 - Install Agents and Certificates
+  hosts: dc_candidates
+  gather_facts: yes
+  tags: [agents, security]
+  
+  roles:
+    - role: agent-installation
+      tags: [agents]
+
+---
+- name: Stage 8 - Final Validation and Reporting
+  hosts: dc_candidates
+  gather_facts: yes
+  tags: [postcheck, report]
+  
+  roles:
+    - role: post-checks
+      tags: [postcheck]
+  
+  post_tasks:
+    - name: Generate deployment report
+      template:
+        src: dc-deployment-report.j2
+        dest: "/tmp/LinkedIn-DC-Deployment-{{ inventory_hostname }}-{{ ansible_date_time.date }}.txt"
+      delegate_to: localhost
+    
+    - name: Send completion notification to Teams
+      uri:
+        url: "{{ teams_webhook_url }}"
+        method: POST
+        body_format: json
+        body:
+          "@type": "MessageCard"
+          "@context": "http://schema.org/extensions"
+          themeColor: "0076D7"
+          summary: "DC Promotion Complete"
+          title: "✅ Domain Controller Promotion Complete"
+          sections:
+            - facts:
+                - name: "Server"
+                  value: "{{ inventory_hostname }}"
+                - name: "Domain"
+                  value: "{{ domain_name }}"
+                - name: "Site"
+                  value: "{{ ad_site_name }}"
+                - name: "Completion Time"
+                  value: "{{ ansible_date_time.iso8601 }}"
+          potentialAction:
+            - "@type": "OpenUri"
+              name: "View in ServiceNow"
+              targets:
+                - os: "default"
+                  uri: "{{ servicenow_change_url }}"
+      delegate_to: localhost
+      when: teams_webhook_url is defined
+    
+    - name: Display manual follow-up reminders
+      debug:
+        msg: |
+          ============================================
+          ✅ AUTOMATION COMPLETE
+          ============================================
+          
+          ⚠️  MANUAL STEPS REQUIRED:
+          1. Verify certificate issued: go/incerts
+          2. Confirm FIM compliance: Contact InfoSec SPM team
+          3. Monitor agent initialization: 5-10 minutes
+          4. Update change ticket: {{ servicenow_change_number | default('CHGxxxxxxx') }}
+          
+          For issues, contact: AD Operations Team
+          ============================================

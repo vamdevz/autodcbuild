@@ -1,0 +1,89 @@
+---
+# roles/reboot-handler/tasks/main.yml
+# Handles post-DC-promotion reboot and service validation
+
+- name: Check if reboot is required
+  win_shell: |
+    # Check for pending reboot indicators
+    $rebootRequired = $false
+    
+    # Check if DCPromo flag is set
+    if (Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending") {
+      $rebootRequired = $true
+    }
+    
+    if (Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired") {
+      $rebootRequired = $true
+    }
+    
+    Write-Output $rebootRequired
+  register: reboot_check
+  changed_when: false
+
+- name: Reboot DC after promotion
+  win_reboot:
+    reboot_timeout: 900
+    connect_timeout: 60
+    msg: "DC Promotion Reboot - Ansible Automation"
+    pre_reboot_delay: 10
+    post_reboot_delay: 60
+  when: reboot_check.stdout | trim | bool or dc_promotion.reboot_required | default(false)
+
+- name: Wait for WinRM to become available
+  wait_for_connection:
+    timeout: 600
+    delay: 90
+    sleep: 15
+
+- name: Gather facts after reboot
+  setup:
+
+- name: Wait for Active Directory services to start
+  win_service:
+    name: "{{ item }}"
+    state: started
+  loop:
+    - NTDS
+    - DNS
+    - Netlogon
+    - W32Time
+    - KDC
+  register: ad_services
+  retries: 5
+  delay: 30
+  until: ad_services is succeeded
+
+- name: Verify all AD services are running
+  win_shell: |
+    $services = @('NTDS', 'DNS', 'Netlogon', 'W32Time', 'KDC')
+    $status = foreach ($svc in $services) {
+      $s = Get-Service -Name $svc
+      [PSCustomObject]@{
+        Service = $svc
+        Status = $s.Status
+        StartType = $s.StartType
+      }
+    }
+    
+    $stopped = $status | Where-Object {$_.Status -ne 'Running'}
+    if ($stopped) {
+      throw "ERROR: Services not running: $($stopped.Service -join ', ')"
+    }
+    
+    $status | Format-Table -AutoSize | Out-String
+  register: service_status
+  changed_when: false
+
+- name: Display service status
+  debug:
+    msg: "{{ service_status.stdout_lines }}"
+
+- name: Reboot handler complete
+  debug:
+    msg: |
+      ============================================
+      ✅ REBOOT COMPLETE - SERVICES HEALTHY
+      ============================================
+      All critical AD services are running
+      Server is ready for health checks
+      ============================================

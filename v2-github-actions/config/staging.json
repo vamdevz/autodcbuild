@@ -1,0 +1,14 @@
+{
+  "environment": "staging",
+  "domain_name": "staging.linkedin.biz",
+  "primary_dc_ip": "10.x.x.x",
+  "ad_site_name": "Staging-Site",
+  "target_host": "stg-dc01.staging.linkedin.biz",
+  "required_drives": ["D", "E"],
+  "min_disk_space_gb": 20,
+  "dns_forwarders": {
+    "internal.linkedin.cn": ["10.44.71.6", "10.44.71.5"],
+    "gtm.corp.microsoft.com": ["172.31.197.245", "172.31.197.246"],
+    "sts.microsoft.com": ["172.31.197.245", "172.31.197.246"]
+  }
+}

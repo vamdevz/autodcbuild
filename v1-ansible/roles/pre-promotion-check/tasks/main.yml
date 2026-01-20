@@ -1,0 +1,75 @@
+---
+# roles/pre-promotion-check/tasks/main.yml
+# Validates server is domain-joined and ready for DC promotion
+
+- name: Check if server is domain-joined
+  win_shell: |
+    $cs = Get-WmiObject Win32_ComputerSystem
+    if ($cs.PartOfDomain -ne $true) {
+      throw "ERROR: Server is not domain-joined. Domain join required before DC promotion."
+    }
+    Write-Output "Domain: $($cs.Domain)"
+  register: domain_check
+  changed_when: false
+
+- name: Display domain membership
+  debug:
+    msg: "✓ Server is member of: {{ domain_check.stdout | trim }}"
+
+- name: Verify DNS points to domain controllers
+  win_shell: |
+    $dnsServers = (Get-DnsClientServerAddress -AddressFamily IPv4 | 
+                   Where-Object {$_.InterfaceAlias -notlike "*Loopback*"}).ServerAddresses
+    
+    if ($dnsServers.Count -eq 0) {
+      throw "ERROR: No DNS servers configured"
+    }
+    
+    Write-Output "DNS Servers: $($dnsServers -join ', ')"
+  register: dns_check
+  changed_when: false
+
+- name: Test connectivity to primary DC
+  win_shell: |
+    $result = Test-NetConnection -ComputerName "{{ primary_dc_ip }}" -Port 389 -WarningAction SilentlyContinue
+    if (-not $result.TcpTestSucceeded) {
+      throw "ERROR: Cannot reach primary DC {{ primary_dc_ip }} on port 389 (LDAP)"
+    }
+    Write-Output "Primary DC {{ primary_dc_ip }} is reachable"
+  register: dc_connectivity
+  changed_when: false
+
+- name: Verify AD module is available
+  win_shell: |
+    Import-Module ActiveDirectory -ErrorAction Stop
+    Write-Output "ActiveDirectory module loaded successfully"
+  register: ad_module_check
+  changed_when: false
+
+- name: Check disk space on D: and E: drives
+  win_shell: |
+    $drives = Get-PSDrive -PSProvider FileSystem | Where-Object {$_.Name -in @('D', 'E')}
+    foreach ($drive in $drives) {
+      $freeGB = [math]::Round($drive.Free / 1GB, 2)
+      if ($freeGB -lt 20) {
+        throw "ERROR: Drive $($drive.Name): has only $freeGB GB free (minimum 20GB required)"
+      }
+      Write-Output "Drive $($drive.Name): $freeGB GB free - OK"
+    }
+  register: disk_check
+  changed_when: false
+
+- name: Pre-flight validation summary
+  debug:
+    msg: |
+      ============================================
+      ✅ PRE-PROMOTION CHECKS PASSED
+      ============================================
+      Domain: {{ domain_check.stdout | trim }}
+      DNS: {{ dns_check.stdout | trim }}
+      Primary DC: {{ dc_connectivity.stdout | trim }}
+      AD Module: OK
+      Disk Space: OK
+      ============================================
+      Ready for DC Promotion
+      ============================================

@@ -1,0 +1,13 @@
+---
+# Handlers for DC promotion role
+
+- name: reboot after promotion
+  win_reboot:
+    reboot_timeout: "{{ reboot_timeout | default(900) }}"
+    msg: "Domain Controller promotion reboot"
+    pre_reboot_delay: 10
+
+- name: wait for dc services
+  wait_for_connection:
+    timeout: 600
+    delay: 90

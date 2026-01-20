@@ -1,0 +1,43 @@
+---
+# Encrypted secrets for production environment
+# Edit with: ansible-vault edit group_vars/production/vault.yml
+
+# Ansible WinRM credentials
+vault_ansible_user: "LINKEDIN\\svc-ansible-prod"
+vault_ansible_password: "CHANGE_ME_IN_VAULT"
+
+# Domain Administrator credentials for DC promotion
+vault_domain_admin: "LINKEDIN\\Administrator"
+vault_domain_password: "CHANGE_ME_IN_VAULT"
+
+# Directory Services Restore Mode password
+vault_dsrm_password: "CHANGE_ME_IN_VAULT"
+
+# ============================================================================
+# LAB/STAGING ENVIRONMENT CREDENTIALS (Azure DC01 & DC02)
+# ============================================================================
+
+# DC01 - Original lab DC (linkedin.local domain)
+vault_dc01_ip: "4.234.159.63"
+vault_dc01_user: "vamdev"
+vault_dc01_password: "CHANGE_ME_IN_VAULT"
+
+# DC02 - Terraform cloned DC (linkedin.local domain)  
+vault_dc02_ip: "20.108.4.144"
+vault_dc02_user: "vamdev"
+vault_dc02_password: "ChangeMe123!@#"
+
+# Lab Domain credentials (linkedin.local)
+vault_lab_domain_admin: "linkedin\\Administrator"
+vault_lab_domain_password: "CHANGE_ME_IN_VAULT"
+vault_lab_dsrm_password: "CHANGE_ME_IN_VAULT"
+
+# Notification webhooks
+vault_teams_webhook: "https://outlook.office.com/webhook/CHANGE_ME"
+
+# ServiceNow integration
+vault_servicenow_url: "https://linkedin.service-now.com/api"
+vault_servicenow_token: "CHANGE_ME_IN_VAULT"
+
+# Staging webhooks (for testing)
+vault_staging_teams_webhook: "https://outlook.office.com/webhook/STAGING_CHANGE_ME"

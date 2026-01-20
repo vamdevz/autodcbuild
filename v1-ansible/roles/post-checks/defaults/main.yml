@@ -1,0 +1,17 @@
+---
+# Default variables for post-checks
+
+# LDAPS auto-enrollment security group
+ldaps_security_group: "SG-LDAPS-DomainController-AutoEnroll"
+
+# Certificate enrollment settings
+trigger_cert_enrollment: true
+
+# Notification settings (override in inventory)
+teams_webhook_url: ""
+servicenow_api_url: ""
+servicenow_token: ""
+
+# Report generation
+generate_report: true
+report_dest_path: "C:\\Temp"

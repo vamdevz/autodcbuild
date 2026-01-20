@@ -1,0 +1,18 @@
+{
+  "keyvault_name": "kv-dclab-0119",
+  "required_secrets": [
+    "DomainAdminUsername",
+    "DomainAdminPassword",
+    "SafeModePassword"
+  ],
+  "environments": {
+    "lab": "kv-dclab-0119",
+    "staging": "dc-promo-keyvault-staging",
+    "production": "dc-promo-keyvault-prod"
+  },
+  "comments": {
+    "lab": "Lab environment Key Vault in VAMDEVTEST resource group",
+    "staging": "Staging environment Key Vault (to be created)",
+    "production": "Production environment Key Vault (to be created)"
+  }
+}

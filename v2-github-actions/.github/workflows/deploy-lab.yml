@@ -1,0 +1,81 @@
+name: Deploy to Lab
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_dc:
+        description: 'Target DC hostname (e.g., dc01.linkedin.local)'
+        required: true
+        type: string
+        default: 'dc01.linkedin.local'
+      skip_validation:
+        description: 'Skip pre-promotion checks (for testing)'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    environment: lab
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Azure Login via OIDC
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      
+      - name: Run DC Promotion Pipeline (Lab)
+        shell: pwsh
+        run: |
+          Write-Host "🧪 Running DC Promotion in LAB environment" -ForegroundColor Cyan
+          Write-Host "Target DC: ${{ inputs.target_dc }}" -ForegroundColor Yellow
+          Write-Host "Skip Validation: ${{ inputs.skip_validation }}" -ForegroundColor Yellow
+          Write-Host ""
+          
+          cd v2-github-actions/scripts
+          
+          $params = @{
+            Environment = "lab"
+            TargetDC = "${{ inputs.target_dc }}"
+            KeyVaultName = "${{ secrets.KEY_VAULT_NAME }}"
+            Verbose = $true
+          }
+          
+          if ("${{ inputs.skip_validation }}" -eq "true") {
+            $params['SkipPreChecks'] = $true
+          }
+          
+          .\Invoke-DCPromotionPipeline.ps1 @params
+      
+      - name: Upload Deployment Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lab-deployment-report-${{ github.run_number }}
+          path: C:\Temp\DC-Deployment-Report-*.txt
+          if-no-files-found: warn
+      
+      - name: Lab Deployment Summary
+        if: always()
+        run: |
+          Write-Host ""
+          Write-Host "================================" -ForegroundColor Cyan
+          Write-Host "  Lab Deployment Complete" -ForegroundColor Green
+          Write-Host "================================" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Environment: LAB" -ForegroundColor Yellow
+          Write-Host "Target DC: ${{ inputs.target_dc }}" -ForegroundColor Yellow
+          Write-Host "Run Number: ${{ github.run_number }}" -ForegroundColor Yellow
+          Write-Host ""
+          Write-Host "Next Steps:" -ForegroundColor Cyan
+          Write-Host "  1. Review deployment report artifact" -ForegroundColor White
+          Write-Host "  2. Verify DC health checks" -ForegroundColor White
+          Write-Host "  3. Test replication and DNS" -ForegroundColor White
+          Write-Host "  4. Once validated, proceed to staging" -ForegroundColor White
+          Write-Host ""

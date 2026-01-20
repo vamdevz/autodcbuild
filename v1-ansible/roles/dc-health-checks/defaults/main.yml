@@ -1,0 +1,12 @@
+---
+# Default variables for DC health checks
+
+# Domain name for dcdiag tests
+domain_name: "linkedin.biz"
+
+# Maximum wait time for replication queue to clear (seconds)
+repl_queue_wait: 600
+
+# Maximum retry attempts for health checks
+health_check_retries: 3
+health_check_delay: 60

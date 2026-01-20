@@ -1,0 +1,17 @@
+---
+# Default variables for authentication check
+
+# Time window to check for events (hours)
+auth_check_window_hours: 2
+
+# Event IDs to monitor
+auth_event_ids:
+  - 4624  # Logon Success
+  - 4768  # Kerberos TGT Request
+  - 4771  # Kerberos Pre-Authentication Failed
+
+# Maximum events to retrieve
+max_auth_events: 100
+
+# Don't fail if no events (normal for new DCs)
+fail_on_no_events: false

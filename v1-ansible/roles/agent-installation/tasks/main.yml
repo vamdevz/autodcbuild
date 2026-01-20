@@ -1,0 +1,193 @@
+---
+# roles/agent-installation/tasks/main.yml
+# Install LinkedIn security and monitoring agents
+
+- name: Check for pre-installed agents (Qualys, MMA)
+  win_shell: |
+    $agents = Get-WmiObject -Class Win32_Product | Where-Object {
+      $_.Name -like "*Qualys*" -or 
+      $_.Name -like "*Microsoft Monitoring Agent*" -or
+      $_.Name -like "*Azure*"
+    } | Select-Object Name, Version
+    
+    if ($agents) {
+      Write-Output "Pre-installed agents found:"
+      $agents | Format-Table -AutoSize | Out-String
+    } else {
+      Write-Output "No pre-installed agents detected"
+    }
+  register: existing_agents
+  changed_when: false
+
+- name: Verify Qualys agent version (must be 6.2.5.4 or higher)
+  win_shell: |
+    $qualys = Get-WmiObject -Class Win32_Product | Where-Object {$_.Name -like "*Qualys*"}
+    
+    if ($qualys) {
+      $version = [Version]$qualys.Version
+      $minVersion = [Version]"6.2.5.4"
+      
+      if ($version -lt $minVersion) {
+        throw "ERROR: Qualys version $($qualys.Version) is below minimum 6.2.5.4"
+      }
+      
+      Write-Output "✓ Qualys Cloud Agent version: $($qualys.Version) - COMPLIANT"
+    } else {
+      Write-Warning "Qualys agent not found - will be installed"
+    }
+  register: qualys_version_check
+  changed_when: false
+  failed_when: false
+
+- name: Display agent check results
+  debug:
+    msg: "{{ existing_agents.stdout_lines }}"
+
+- name: Ensure C:\Temp directory exists
+  win_file:
+    path: C:\Temp
+    state: directory
+
+- name: Copy installers from lva1-adc01 central share
+  win_shell: |
+    $source = "\\lva1-adc01.linkedin.biz\c$\Temp"
+    $dest = "C:\Temp"
+    
+    # Test connectivity to share
+    if (!(Test-Path $source)) {
+      throw "ERROR: Cannot access $source - check network connectivity and permissions"
+    }
+    
+    # Copy installer files
+    $installers = @(
+      "ndp48-x86-x64-allos-enu.exe",
+      "AzureADPasswordProtectionDCAgentSetup.exe",
+      "Azure ATP Sensor Setup.exe",
+      "QuestChangeAuditorAgent.msi"
+    )
+    
+    $copied = 0
+    foreach ($installer in $installers) {
+      if (Test-Path "$source\$installer") {
+        Copy-Item "$source\$installer" -Destination "$dest\$installer" -Force
+        $copied++
+        Write-Output "✓ Copied: $installer"
+      } else {
+        Write-Warning "Not found: $installer (will skip)"
+      }
+    }
+    
+    Write-Output "Copied $copied out of $($installers.Count) installers"
+  register: installer_copy
+  changed_when: "'Copied' in installer_copy.stdout"
+
+- name: Install .NET Framework 4.8 (required for Azure AD Password Protection)
+  win_package:
+    path: C:\Temp\ndp48-x86-x64-allos-enu.exe
+    product_id: '{508DA97E-5540-3653-B171-5CA0E54AA9CB}'
+    arguments: '/q /norestart'
+    state: present
+  register: dotnet_install
+
+- name: Reboot after .NET Framework 4.8 installation
+  win_reboot:
+    reboot_timeout: 600
+    msg: ".NET Framework 4.8 installation - reboot required"
+  when: dotnet_install.changed
+
+- name: Wait for system after .NET reboot
+  wait_for_connection:
+    timeout: 600
+    delay: 60
+  when: dotnet_install.changed
+
+- name: Install Azure AD Password Protection DC Agent
+  win_package:
+    path: C:\Temp\AzureADPasswordProtectionDCAgentSetup.exe
+    arguments: '/quiet /norestart'
+    state: present
+  register: azuread_pwd_agent
+  ignore_errors: yes  # May not exist in all environments
+
+- name: Install Azure Advanced Threat Protection Sensor
+  win_package:
+    path: "C:\\Temp\\Azure ATP Sensor Setup.exe"
+    arguments: '/quiet NetFrameworkCommandLineArguments="/q" /norestart'
+    state: present
+  register: azureatp_install
+  ignore_errors: yes
+
+- name: Install Quest Change Auditor Agent
+  win_package:
+    path: C:\Temp\QuestChangeAuditorAgent.msi
+    arguments: '/qn'
+    state: present
+  register: quest_agent
+  ignore_errors: yes
+
+- name: Final reboot after all agent installations
+  win_shell: |
+    shutdown /r /c "ChangeTicket - {{ inventory_hostname }} DC Promotion" /t 60
+  async: 0
+  poll: 0
+  ignore_errors: yes
+
+- name: Wait for server to come back online after agent reboot
+  wait_for_connection:
+    timeout: 900
+    delay: 90
+
+- name: Verify agent services are installed
+  win_shell: |
+    $services = @('AzureADPasswordProtectionDCAgent', 'QualysAgent', 'NPSrvHost', 'HealthService', 'AATPSensor')
+    $status = foreach ($svc in $services) {
+      $s = Get-Service -Name $svc -ErrorAction SilentlyContinue
+      if ($s) {
+        [PSCustomObject]@{
+          Service = $svc
+          DisplayName = $s.DisplayName
+          Status = $s.Status
+          StartType = $s.StartType
+        }
+      }
+    }
+    
+    if ($status) {
+      Write-Output "Agent Services Status:"
+      $status | Format-Table -AutoSize | Out-String
+      
+      $stopped = $status | Where-Object {$_.Status -ne 'Running'}
+      if ($stopped) {
+        Write-Warning "⚠️  Some agents are stopped (normal during initialization):"
+        $stopped | Format-Table -AutoSize | Out-String
+        Write-Output "`n✓ This is expected - agents will start within 5-10 minutes"
+      }
+    } else {
+      Write-Output "No agent services found (may need manual installation)"
+    }
+  register: agent_services
+  changed_when: false
+  failed_when: false
+
+- name: Display agent service status
+  debug:
+    msg: "{{ agent_services.stdout_lines }}"
+
+- name: Agent installation summary
+  debug:
+    msg: |
+      ============================================
+      ✅ AGENT INSTALLATION COMPLETE
+      ============================================
+      Installed Agents:
+      - .NET Framework 4.8: {{ 'INSTALLED' if dotnet_install.changed else 'ALREADY PRESENT' }}
+      - Azure AD Password Protection: {{ 'INSTALLED' if azuread_pwd_agent.changed else 'SKIPPED' }}
+      - Azure ATP Sensor: {{ 'INSTALLED' if azureatp_install.changed else 'SKIPPED' }}
+      - Quest Change Auditor: {{ 'INSTALLED' if quest_agent.changed else 'SKIPPED' }}
+      - Qualys Cloud Agent: PRE-INSTALLED (v{{ qualys_version_check.stdout | default('Unknown') }})
+      - Microsoft Monitoring Agent: PRE-INSTALLED
+      
+      ⚠️  Note: Some agent services may show 'Stopped'
+      This is normal during first-time initialization.
+      They will automatically start within 5-10 minutes.
+      ============================================

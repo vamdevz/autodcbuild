@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkedIn DC Promotion Workflow</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #F9FAFB; }
+        .header-bg { background: linear-gradient(135deg, #0077B5 0%, #004471 100%); }
+        .stage-card { transition: all 0.3s ease; }
+        .stage-card:hover { transform: translateY(-2px); box-shadow: 0 20px 40px -15px rgba(0,0,0,0.15); }
+    </style>
+</head>
+<body class="p-8">
+
+    <div class="max-w-7xl mx-auto bg-white shadow-2xl rounded-2xl overflow-hidden border border-gray-100">
+        
+        <!-- Header -->
+        <div class="header-bg p-8 text-white">
+            <div class="flex items-center gap-4 mb-3">
+                <div class="bg-white p-3 rounded-xl"><i data-lucide="shield-check" class="text-blue-600" size="32"></i></div>
+                <div>
+                    <h1 class="text-3xl font-extrabold tracking-tight">LinkedIn - Domain Controller Build & Promotion</h1>
+                    <p class="text-blue-100 text-sm font-medium mt-1">Automated IaC Pipeline for linkedin.biz & internal.linkedin.cn</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="p-8 space-y-6">
+
+            <!-- Pre-Req -->
+            <div class="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg">
+                <div class="flex items-start gap-3">
+                    <i data-lucide="alert-circle" class="text-blue-600 mt-0.5" size="20"></i>
+                    <div>
+                        <p class="font-bold text-blue-900 text-sm">PRE-REQUISITE</p>
+                        <p class="text-xs text-blue-700 mt-1"><b>Machine must be domain-joined</b> (linkedin.biz or internal.linkedin.cn) before starting automation</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stage 1: Euclid -->
+            <div class="stage-card bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-6">
+                <div class="flex items-center gap-4 mb-4">
+                    <div class="bg-green-500 p-3 rounded-full"><i data-lucide="cloud" class="text-white" size="24"></i></div>
+                    <div>
+                        <h3 class="text-lg font-bold text-green-900">STAGE 1: Euclid Platform</h3>
+                        <p class="text-xs text-green-700 font-medium">Infrastructure VM Provisioning</p>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-lg text-xs text-gray-700 space-y-1">
+                    <p>✓ Windows Server 2019/2022 provisioned</p>
+                    <p>✓ Domain-joined to linkedin.biz or internal.linkedin.cn</p>
+                    <p>✓ WinRM enabled (port 5985)</p>
+                    <p>✓ DNS pointing to existing DCs</p>
+                    <p>✓ D: and E: drives configured</p>
+                </div>
+            </div>
+
+            <!-- Ansible Core Pipeline -->
+            <div class="bg-gradient-to-br from-orange-500 to-red-500 text-white rounded-xl p-6 shadow-lg">
+                <div class="flex items-center gap-3 mb-6">
+                    <i data-lucide="terminal" size="28"></i>
+                    <h3 class="text-xl font-extrabold">ANSIBLE CONTROL NODE - Automation Pipeline</h3>
+                </div>
+
+                <!-- Steps Grid -->
+                <div class="grid grid-cols-3 gap-4">
+                    <!-- Step 1 -->
+                    <div class="bg-white/10 backdrop-blur-sm p-4 rounded-xl border border-white/20">
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="bg-white text-orange-600 rounded-full w-6 h-6 flex items-center justify-center text-xs font-black">1</div>
+                            <h4 class="font-bold text-sm">DC Promotion</h4>
+                        </div>
+                        <p class="text-[10px] leading-relaxed opacity-90">Install-ADDSDomainController to existing domain (D:\NTDS, D:\SYSVOL, E:\Logs)</p>
+                    </div>
+
+                    <!-- Step 2 -->
+                    <div class="bg-white/10 backdrop-blur-sm p-4 rounded-xl border border-white/20">
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="bg-white text-orange-600 rounded-full w-6 h-6 flex items-center justify-center text-xs font-black">2</div>
+                            <h4 class="font-bold text-sm">Reboot Handling</h4>
+                        </div>
+                        <p class="text-[10px] leading-relaxed opacity-90">Controlled reboot, wait for WinRM, verify NTDS/DNS/Netlogon services running</p>
+                    </div>
+
+                    <!-- Step 3 -->
+                    <div class="bg-white/10 backdrop-blur-sm p-4 rounded-xl border border-white/20">
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="bg-white text-orange-600 rounded-full w-6 h-6 flex items-center justify-center text-xs font-black">3</div>
+                            <h4 class="font-bold text-sm">Health Checks</h4>
+                        </div>
+                        <p class="text-[10px] leading-relaxed opacity-90">8 validation tests: SYSVOL/NETLOGON shares, repadmin /showrepl, repadmin /queue=0, dcdiag suite</p>
+                    </div>
+
+                    <!-- Step 4 -->
+                    <div class="bg-white/10 backdrop-blur-sm p-4 rounded-xl border border-white/20">
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="bg-white text-orange-600 rounded-full w-6 h-6 flex items-center justify-center text-xs font-black">4</div>
+                            <h4 class="font-bold text-sm">DNS Forwarders</h4>
+                        </div>
+                        <p class="text-[10px] leading-relaxed opacity-90">Configure 4 conditional forwarders (China, BIZ, gtm.corp.microsoft.com, sts.microsoft.com)</p>
+                    </div>
+
+                    <!-- Step 5 -->
+                    <div class="bg-white/10 backdrop-blur-sm p-4 rounded-xl border border-white/20">
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="bg-white text-orange-600 rounded-full w-6 h-6 flex items-center justify-center text-xs font-black">5</div>
+                            <h4 class="font-bold text-sm">Auth Validation</h4>
+                        </div>
+                        <p class="text-[10px] leading-relaxed opacity-90">Check Security event log for Event IDs 4624, 4768, 4771 (user authentication)</p>
+                    </div>
+
+                    <!-- Step 6 -->
+                    <div class="bg-white/10 backdrop-blur-sm p-4 rounded-xl border border-white/20">
+                        <div class="flex items-center gap-2 mb-2">
+                            <div class="bg-white text-orange-600 rounded-full w-6 h-6 flex items-center justify-center text-xs font-black">6</div>
+                            <h4 class="font-bold text-sm">Agent Installation</h4>
+                        </div>
+                        <p class="text-[10px] leading-relaxed opacity-90">Install: .NET 4.8, Azure AD Pwd Protection, Azure ATP, Quest Change Auditor (verify Qualys ≥6.2.5.4)</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stage 2: Result -->
+            <div class="stage-card bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6">
+                <div class="flex items-center gap-4 mb-4">
+                    <div class="bg-blue-500 p-3 rounded-full"><i data-lucide="server" class="text-white" size="24"></i></div>
+                    <div>
+                        <h3 class="text-lg font-bold text-blue-900">FINAL STATE: Windows AD DS Domain Controller</h3>
+                        <p class="text-xs text-blue-700 font-medium">Fully Functional, Secure, and Managed</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-4 gap-3">
+                    <div class="bg-white p-3 rounded-lg border border-blue-100">
+                        <p class="text-[9px] font-bold text-gray-500 uppercase mb-1">Replication</p>
+                        <p class="text-xs font-bold text-blue-900">✓ Healthy</p>
+                    </div>
+                    <div class="bg-white p-3 rounded-lg border border-blue-100">
+                        <p class="text-[9px] font-bold text-gray-500 uppercase mb-1">DNS</p>
+                        <p class="text-xs font-bold text-blue-900">✓ Forwarders OK</p>
+                    </div>
+                    <div class="bg-white p-3 rounded-lg border border-blue-100">
+                        <p class="text-[9px] font-bold text-gray-500 uppercase mb-1">Agents</p>
+                        <p class="text-xs font-bold text-blue-900">✓ All Installed</p>
+                    </div>
+                    <div class="bg-white p-3 rounded-lg border border-blue-100">
+                        <p class="text-[9px] font-bold text-gray-500 uppercase mb-1">LDAPS</p>
+                        <p class="text-xs font-bold text-blue-900">✓ Enrolled</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Manual Follow-up -->
+            <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg">
+                <div class="flex items-start gap-3">
+                    <i data-lucide="user-check" class="text-yellow-600 mt-0.5" size="20"></i>
+                    <div>
+                        <p class="font-bold text-yellow-900 text-sm">MANUAL FOLLOW-UP REQUIRED</p>
+                        <div class="text-xs text-yellow-800 mt-2 space-y-1">
+                            <p>1. <b>Certificate Validation:</b> Verify cert issued at go/incerts portal</p>
+                            <p>2. <b>FIM Compliance:</b> Confirm with InfoSec SPM team (Qualys v6.2.5.4+ verified)</p>
+                            <p>3. <b>Change Ticket:</b> Update ServiceNow with deployment completion details</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Footer -->
+        <div class="bg-gray-50 border-t border-gray-200 p-4 text-center">
+            <p class="text-[10px] font-bold text-gray-400 tracking-wider uppercase">LinkedIn Infrastructure Automation Engineering • 2026 • Confidential</p>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

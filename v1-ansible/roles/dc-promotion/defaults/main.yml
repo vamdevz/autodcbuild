@@ -1,0 +1,30 @@
+---
+# Default variables for DC promotion role
+# These can be overridden in inventory or group_vars
+
+# Domain configuration
+domain_name: "linkedin.biz"
+domain_admin_user: "{{ vault_domain_admin }}"
+domain_admin_password: "{{ vault_domain_password }}"
+dsrm_password: "{{ vault_dsrm_password }}"
+
+# AD Site configuration
+ad_site_name: "Default-First-Site-Name"
+
+# Database paths
+adds_database_path: "D:\\NTDS"
+adds_sysvol_path: "D:\\SYSVOL"
+adds_log_path: "E:\\NTDS\\Logs"
+
+# Installation options
+install_dns: true
+is_global_catalog: true
+read_only_dc: false
+
+# Primary DC for validation
+primary_dc_ip: "10.41.63.5"
+primary_dc_hostname: "lva1-adc01.linkedin.biz"
+
+# Timeout settings
+dc_promotion_timeout: 3600  # 1 hour
+reboot_timeout: 900  # 15 minutes

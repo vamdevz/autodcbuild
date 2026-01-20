@@ -1,0 +1,50 @@
+---
+# Default variables for DNS configuration
+
+# Domain name (determines which forwarders to create)
+domain_name: "linkedin.biz"
+
+# DNS Conditional Forwarder definitions
+dns_forwarders:
+  # For BIZ domain DCs - add China forwarder
+  china:
+    zone_name: "internal.linkedin.cn"
+    master_servers:
+      - "10.44.71.6"
+      - "10.44.71.5"
+    applicable_domains:
+      - "linkedin.biz"
+  
+  # For China domain DCs - add BIZ forwarder
+  biz:
+    zone_name: "linkedin.biz"
+    master_servers:
+      - "10.41.63.5"
+      - "10.41.63.6"
+      - "172.21.2.103"
+      - "172.21.2.104"
+    applicable_domains:
+      - "internal.linkedin.cn"
+  
+  # For all DCs - Microsoft internal domains
+  gtm:
+    zone_name: "gtm.corp.microsoft.com"
+    master_servers:
+      - "172.31.197.245"
+      - "172.31.197.246"
+      - "172.31.197.80"
+      - "172.31.197.81"
+    applicable_domains:
+      - "linkedin.biz"
+      - "internal.linkedin.cn"
+  
+  sts:
+    zone_name: "sts.microsoft.com"
+    master_servers:
+      - "172.31.197.245"
+      - "172.31.197.246"
+      - "172.31.197.80"
+      - "172.31.197.81"
+    applicable_domains:
+      - "linkedin.biz"
+      - "internal.linkedin.cn"

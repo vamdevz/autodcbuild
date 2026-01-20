@@ -1,0 +1,27 @@
+---
+# Default variables for agent installation
+
+# Central file share for installers
+installer_source_share: "\\\\lva1-adc01.linkedin.biz\\c$\\Temp"
+installer_dest_path: "C:\\Temp"
+
+# Agent installer file names
+installer_files:
+  dotnet48: "ndp48-x86-x64-allos-enu.exe"
+  azure_ad_pwd: "AzureADPasswordProtectionDCAgentSetup.exe"
+  azure_atp: "Azure ATP Sensor Setup.exe"
+  quest: "QuestChangeAuditorAgent.msi"
+
+# Qualys minimum version
+qualys_min_version: "6.2.5.4"
+
+# Agent service names to validate
+agent_services:
+  - "AzureADPasswordProtectionDCAgent"
+  - "QualysAgent"
+  - "NPSrvHost"
+  - "HealthService"
+  - "AATPSensor"
+
+# Reboot wait time after agent installation (seconds)
+agent_reboot_delay: 60

@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enterprise DC Promotion Infographic</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #F3F4F6;
+            color: #1F2937;
+        }
+        .header-bg { background-color: #FFFFFF; border-bottom: 2px solid #E5E7EB; }
+        .section-label { font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; line-height: 1.1; }
+        
+        /* Workflow Colors */
+        .wf-green-bg { background-color: #ECFDF5; border: 1px solid #10B981; }
+        .wf-green-text { color: #065F46; }
+        .wf-green-arrow { color: #10B981; }
+        
+        .wf-orange-bg { background-color: #FFF7ED; border: 1px solid #F97316; }
+        .wf-orange-text { color: #9A3412; }
+        .wf-orange-arrow { color: #F97316; }
+        
+        .wf-blue-bg { background-color: #EFF6FF; border: 1px solid #3B82F6; }
+        .wf-blue-text { color: #1E40AF; }
+        .wf-blue-header { background-color: #1E40AF; color: white; }
+
+        .icon-container { background-color: white; border-radius: 50%; padding: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        
+        .dotted-line { border-top: 2px dotted #D1D5DB; }
+    </style>
+</head>
+<body class="p-4 flex flex-col items-center min-h-screen">
+
+    <div class="max-w-6xl w-full bg-white shadow-2xl rounded-lg overflow-hidden border border-gray-200">
+        
+        <!-- Main Title -->
+        <div class="header-bg p-6 text-center">
+            <h1 class="text-2xl font-extrabold tracking-tight">Enterprise Identity: IaC Windows Domain Controller Build & Promotion Workflow</h1>
+        </div>
+
+        <div class="p-8 space-y-8">
+            
+            <!-- Section 1: Main Workflow -->
+            <div class="grid grid-cols-12 gap-4 items-center">
+                <div class="col-span-2">
+                    <h2 class="section-label text-gray-500">MAIN WORKFLOW:<br/><span class="text-gray-900">Zero-Touch VM<br/>Provisioning</span></h2>
+                    <p class="text-[10px] text-gray-400 mt-1">(API-Driven Euclid Request)</p>
+                </div>
+                
+                <div class="col-span-10 flex items-center justify-between wf-green-bg p-6 rounded-xl relative">
+                    <div class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-white px-4 py-0.5 rounded-full border border-green-200 text-[10px] font-bold text-green-600 uppercase tracking-widest">PROVISIONED & READY</div>
+                    
+                    <!-- Step 1 -->
+                    <div class="flex flex-col items-center text-center space-y-2 w-1/3">
+                        <div class="icon-container border border-gray-100"><i data-lucide="cloud" class="text-gray-600"></i></div>
+                        <div>
+                            <p class="text-xs font-bold leading-tight">Euclid Portal / API</p>
+                            <p class="text-[9px] text-gray-500 italic">Infra Team Services</p>
+                        </div>
+                    </div>
+
+                    <i data-lucide="arrow-right" class="wf-green-arrow w-8 h-8"></i>
+
+                    <!-- Step 2 -->
+                    <div class="flex flex-col items-center text-center space-y-2 w-1/3">
+                        <div class="icon-container border border-gray-100"><i data-lucide="monitor" class="text-gray-600"></i></div>
+                        <div>
+                            <p class="text-xs font-bold leading-tight">Modern Windows VM</p>
+                            <p class="text-[9px] text-gray-500 italic">Pre-Staged Base OS</p>
+                        </div>
+                    </div>
+
+                    <i data-lucide="arrow-right" class="wf-green-arrow w-8 h-8"></i>
+
+                    <!-- Step 3 -->
+                    <div class="flex flex-col items-center text-center space-y-2 w-1/3">
+                        <div class="icon-container border border-gray-100"><i data-lucide="server" class="text-gray-600"></i></div>
+                        <div>
+                            <p class="text-xs font-bold leading-tight">Managed Target</p>
+                            <p class="text-[9px] text-gray-500 italic">Inventory Ready</p>
+                        </div>
+                    </div>
+
+                    <div class="absolute -right-4 top-1/2 transform -translate-y-1/2 translate-x-full flex flex-col items-center">
+                         <i data-lucide="shield-check" class="text-green-500 w-10 h-10"></i>
+                         <p class="text-[9px] font-bold text-green-700 mt-1">Ready for Ansible</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dotted-line w-full"></div>
+
+            <!-- Section 2: Ansible Core -->
+            <div class="grid grid-cols-12 gap-4 items-start">
+                <div class="col-span-2 pt-2">
+                    <h2 class="section-label text-gray-500">THE ANSIBLE ENGINE:<br/><span class="text-gray-900">Promotion &<br/>Lifecycle Logic</span></h2>
+                </div>
+                
+                <div class="col-span-10 space-y-4">
+                    <!-- Ansible Header -->
+                    <div class="bg-orange-500 text-white text-center py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-3 shadow-md">
+                        <i data-lucide="terminal" size="18"></i>
+                        Ansible Control Node: DC Promotion Sequence (Role-Based)
+                    </div>
+
+                    <!-- Ansible Columns -->
+                    <div class="grid grid-cols-3 gap-4">
+                        <!-- Exception style 1 -->
+                        <div class="wf-orange-bg p-4 rounded-lg relative overflow-hidden">
+                            <div class="absolute -top-1 -right-1 bg-orange-100 text-orange-600 p-1 rounded-bl-lg"><i data-lucide="alert-triangle" size="12"></i></div>
+                            <h3 class="text-[11px] font-bold text-orange-800 border-b border-orange-200 pb-1 mb-2">SEQUENCE 1: PROMOTION</h3>
+                            <div class="flex items-start gap-3">
+                                <i data-lucide="key" size="20" class="text-orange-500 flex-shrink-0"></i>
+                                <p class="text-[10px] leading-relaxed font-medium">Execution of <span class="bg-orange-100 px-1 font-mono">Install-ADDSDomainController</span>. Automates forest join and metadata sync.</p>
+                            </div>
+                        </div>
+
+                        <!-- Exception style 2 -->
+                        <div class="wf-orange-bg p-4 rounded-lg relative overflow-hidden">
+                            <div class="absolute -top-1 -right-1 bg-orange-100 text-orange-600 p-1 rounded-bl-lg"><i data-lucide="alert-triangle" size="12"></i></div>
+                            <h3 class="text-[11px] font-bold text-orange-800 border-b border-orange-200 pb-1 mb-2">SEQUENCE 2: REBOOT HANDLING</h3>
+                            <div class="flex items-start gap-3">
+                                <i data-lucide="refresh-cw" size="20" class="text-orange-500 flex-shrink-0"></i>
+                                <p class="text-[10px] leading-relaxed font-medium">Automatic post-promotion reboot. <span class="bg-orange-100 px-1">Wait_for_connection</span> ensures WinRM is healthy before continuing.</p>
+                            </div>
+                        </div>
+
+                        <!-- Exception style 3 -->
+                        <div class="wf-orange-bg p-4 rounded-lg relative overflow-hidden">
+                            <div class="absolute -top-1 -right-1 bg-orange-100 text-orange-600 p-1 rounded-bl-lg"><i data-lucide="alert-triangle" size="12"></i></div>
+                            <h3 class="text-[11px] font-bold text-orange-800 border-b border-orange-200 pb-1 mb-2">SEQUENCE 3: HARDENING</h3>
+                            <div class="flex items-start gap-3">
+                                <i data-lucide="lock" size="20" class="text-orange-500 flex-shrink-0"></i>
+                                <p class="text-[10px] leading-relaxed font-medium">Triggering <b>DSC Pull configurations</b> for GPO mapping, security baselines, and local admin lockdown.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 3: Validation -->
+            <div class="grid grid-cols-12 gap-4 items-start pt-4">
+                <div class="col-span-2 pt-2">
+                    <h2 class="section-label text-gray-500">POST-CHECKS:<br/><span class="text-gray-900">Validation &<br/>Compliance State</span></h2>
+                </div>
+                
+                <div class="col-span-10 wf-blue-bg rounded-xl overflow-hidden shadow-sm">
+                    <div class="wf-blue-header py-2 px-6 text-sm font-bold flex items-center justify-between">
+                        <span>Ensure Active Directory Health & Security Agents (Automated Post-Build)</span>
+                        <div class="flex items-center gap-2 bg-blue-500 px-2 py-0.5 rounded text-[10px]">
+                            <i data-lucide="check-circle" size="12"></i> ANSIBLE VALIDATED
+                        </div>
+                    </div>
+
+                    <div class="p-4 grid grid-cols-2 gap-4">
+                        <!-- Validation Box 1 -->
+                        <div class="bg-white p-4 rounded-lg border border-blue-100 flex gap-4">
+                            <div class="bg-blue-50 p-3 rounded-lg"><i data-lucide="activity" class="text-blue-600"></i></div>
+                            <div class="space-y-1">
+                                <p class="text-[11px] font-extrabold text-blue-900 uppercase tracking-wide">Health: AD Replication</p>
+                                <p class="text-[10px] text-gray-600 leading-tight">Verify Sysvol, DNS, and SRV records. Automated test runs <span class="font-mono text-blue-700">dcdiag /v</span> to confirm connectivity.</p>
+                            </div>
+                        </div>
+
+                        <!-- Validation Box 2 -->
+                        <div class="bg-white p-4 rounded-lg border border-blue-100 flex gap-4">
+                            <div class="bg-blue-50 p-3 rounded-lg"><i data-lucide="shield" class="text-blue-600"></i></div>
+                            <div class="space-y-1">
+                                <p class="text-[11px] font-extrabold text-blue-900 uppercase tracking-wide">Security: MMA & Qualys</p>
+                                <p class="text-[10px] text-gray-600 leading-tight">Automatic injection of Security Agents. Confirming log ingestion to Sentinel and Qualys vuln scanning.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Note -->
+                    <div class="bg-blue-50 border-t border-blue-100 p-4 flex gap-4 items-start">
+                        <i data-lucide="file-text" class="text-blue-400 mt-1 flex-shrink-0" size="16"></i>
+                        <p class="text-[10px] text-blue-800 leading-relaxed italic">
+                            <b>PLATFORM NOTE:</b> No manual RDP required for promotion. All site-link placement and subnet associations are handled via pre-staged AD identity objects within the Ansible playbooks.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Footer Bar -->
+        <div class="bg-gray-50 p-3 text-center border-t border-gray-100">
+            <p class="text-[9px] font-bold text-gray-400 tracking-widest uppercase">Proprietary & Confidential &bull; Infrastructure Automation Engineering 2026</p>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

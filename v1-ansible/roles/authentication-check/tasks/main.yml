@@ -1,0 +1,75 @@
+---
+# roles/authentication-check/tasks/main.yml
+# Validates DC is processing authentication requests
+
+- name: Check for authentication events in Security log
+  win_shell: |
+    # Look for authentication events in the last 2 hours
+    $events = Get-WinEvent -FilterHashtable @{
+      LogName='Security'
+      Id=4624,4768,4771
+      StartTime=(Get-Date).AddHours(-2)
+    } -MaxEvents 100 -ErrorAction SilentlyContinue
+    
+    if ($events.Count -eq 0) {
+      Write-Warning "No authentication events found in the last 2 hours"
+      Write-Output "Status: MONITORING (DC may not have processed auth requests yet)"
+      Write-Output "This is normal for newly promoted DCs"
+    } else {
+      Write-Output "✓ Found $($events.Count) authentication events"
+      
+      # Group by Event ID
+      $grouped = $events | Group-Object Id
+      foreach ($group in $grouped) {
+        $eventName = switch ($group.Name) {
+          "4624" { "Logon Success" }
+          "4768" { "Kerberos TGT Request" }
+          "4771" { "Kerberos Pre-Auth Failed" }
+        }
+        Write-Output "  - EventID $($group.Name) ($eventName): $($group.Count) events"
+      }
+    }
+  register: auth_events
+  changed_when: false
+  failed_when: false  # Don't fail if no events yet
+
+- name: Display authentication event summary
+  debug:
+    msg: "{{ auth_events.stdout_lines }}"
+
+- name: Get sample authentication events
+  win_shell: |
+    $events = Get-WinEvent -FilterHashtable @{
+      LogName='Security'
+      Id=4624,4768,4771
+      StartTime=(Get-Date).AddHours(-1)
+    } -MaxEvents 5 -ErrorAction SilentlyContinue
+    
+    if ($events) {
+      Write-Output "Sample Recent Authentication Events:"
+      $events | Select-Object TimeCreated, Id, Message | Format-List | Out-String
+    } else {
+      Write-Output "No recent authentication events (this is normal for new DCs)"
+    }
+  register: sample_events
+  changed_when: false
+  failed_when: false
+
+- name: Authentication check summary
+  debug:
+    msg: |
+      ============================================
+      ✅ AUTHENTICATION CHECK COMPLETE
+      ============================================
+      Status: {{ 'Active' if auth_events.stdout is search('Found') else 'Monitoring' }}
+      
+      {% if auth_events.stdout is search('Found') %}
+      DC is actively processing authentication requests
+      {% else %}
+      DC is ready but no auth traffic detected yet
+      (Normal for newly promoted DCs - will activate as users authenticate)
+      {% endif %}
+      
+      Monitor with:
+      Get-WinEvent -LogName Security -FilterXPath "*[System[(EventID=4624 or EventID=4768 or EventID=4771)]]" -MaxEvents 10
+      ============================================

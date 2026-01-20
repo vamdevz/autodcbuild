@@ -1,0 +1,21 @@
+---
+# Default variables for reboot handler
+
+# Reboot timeout in seconds
+reboot_timeout: 900
+
+# Wait for connection settings
+wait_timeout: 600
+wait_delay: 90
+
+# Services to verify after reboot
+critical_services:
+  - NTDS
+  - DNS
+  - Netlogon
+  - W32Time
+  - KDC
+
+# Service startup retry settings
+service_check_retries: 5
+service_check_delay: 30

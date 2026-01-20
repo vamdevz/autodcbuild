@@ -1,0 +1,139 @@
+---
+# roles/dc-health-checks/tasks/main.yml
+# Comprehensive DC health validation per LinkedIn standards
+
+- name: "Health Check 1a: Verify SYSVOL and NETLOGON shares"
+  win_shell: |
+    $shares = Get-WmiObject win32_share | Where-Object {$_.Name -in @('SYSVOL', 'NETLOGON')}
+    
+    if ($shares.Count -ne 2) {
+      throw "ERROR: SYSVOL and/or NETLOGON shares not found (found: $($shares.Count))"
+    }
+    
+    Write-Output "✓ SYSVOL and NETLOGON shares are present"
+    $shares | Select-Object Name, Path | Format-Table -AutoSize | Out-String
+  register: shares_check
+  changed_when: false
+
+- name: Display share check results
+  debug:
+    msg: "{{ shares_check.stdout_lines }}"
+
+- name: "Health Check 1b: Verify AD replication (repadmin /showrepl)"
+  win_shell: |
+    $output = repadmin /showrepl
+    
+    if ($LASTEXITCODE -ne 0) {
+      throw "ERROR: repadmin /showrepl failed with exit code $LASTEXITCODE"
+    }
+    
+    # Check for successful replication with timestamps
+    if ($output -match "Last attempt.*was successful") {
+      Write-Output "✓ Replication is successful with valid timestamps"
+    } else {
+      throw "ERROR: Replication not showing successful status"
+    }
+    
+    $output
+  register: repl_status
+  changed_when: false
+  retries: 3
+  delay: 60
+  until: repl_status is succeeded
+
+- name: "Health Check 1c: Check replication queue (repadmin /queue)"
+  win_shell: |
+    $output = repadmin /queue
+    
+    # Parse queue count
+    if ($output -match "Queue contains (\d+)") {
+      $queueCount = [int]$matches[1]
+      
+      if ($queueCount -gt 0) {
+        Write-Warning "Replication queue contains $queueCount items. Waiting for convergence..."
+        Write-Output "Queue: $queueCount items (retry recommended)"
+        exit 1
+      } else {
+        Write-Output "✓ Replication queue is empty (0 items)"
+      }
+    } else {
+      Write-Output "✓ Replication queue: $output"
+    }
+  register: repl_queue
+  changed_when: false
+  retries: 5
+  delay: 120
+  until: repl_queue.rc == 0
+
+- name: "Health Check 1d: dcdiag /test:dcpromo"
+  win_shell: |
+    $output = dcdiag /test:dcpromo /dnsdomain:{{ domain_name }} /replicadc
+    
+    if ($output -match "failed") {
+      throw "ERROR: dcdiag /test:dcpromo failed"
+    }
+    
+    Write-Output "✓ dcdiag /test:dcpromo passed"
+    $output
+  register: dcdiag_dcpromo
+  changed_when: false
+
+- name: "Health Check 1e: dcdiag /test:registerindns"
+  win_shell: |
+    $output = dcdiag /test:registerindns /dnsdomain:{{ domain_name }}
+    
+    if ($output -match "failed") {
+      throw "ERROR: dcdiag /test:registerindns failed"
+    }
+    
+    Write-Output "✓ dcdiag /test:registerindns passed"
+    $output
+  register: dcdiag_registerindns
+  changed_when: false
+
+- name: "Health Check 1f: Full dcdiag"
+  win_command: dcdiag.exe
+  register: dcdiag_full
+  changed_when: false
+  failed_when: "'failed' in dcdiag_full.stdout.lower()"
+
+- name: "Health Check 1g: dcdiag /test:dns"
+  win_command: dcdiag.exe /test:dns
+  register: dcdiag_dns
+  changed_when: false
+  failed_when: "'failed' in dcdiag_dns.stdout.lower()"
+
+- name: Display all health check results
+  debug:
+    msg: |
+      ============================================
+      ✅ ALL HEALTH CHECKS PASSED
+      ============================================
+      1a. SYSVOL/NETLOGON Shares: PASS
+      1b. Replication Status: PASS (timestamps OK)
+      1c. Replication Queue: PASS (0 items)
+      1d. dcdiag /test:dcpromo: PASS
+      1e. dcdiag /test:registerindns: PASS
+      1f. Full dcdiag: PASS
+      1g. dcdiag /test:dns: PASS
+      ============================================
+
+- name: Save health check results to file
+  win_copy:
+    content: |
+      DC Health Check Report
+      =====================
+      Server: {{ inventory_hostname }}
+      Date: {{ ansible_date_time.iso8601 }}
+      
+      SYSVOL/NETLOGON Shares:
+      {{ shares_check.stdout }}
+      
+      Replication Status:
+      {{ repl_status.stdout }}
+      
+      Replication Queue:
+      {{ repl_queue.stdout }}
+      
+      DCDiag Tests: ALL PASSED
+    dest: "C:\\Temp\\DC-Health-Check-{{ ansible_date_time.date }}.txt"

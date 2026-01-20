@@ -1,0 +1,168 @@
+---
+# roles/post-checks/tasks/main.yml
+# Final validation, certificate enrollment, and reporting
+
+- name: Add DC computer to SG-LDAPS-DomainController-AutoEnroll group
+  win_shell: |
+    Import-Module ActiveDirectory
+    
+    $dcComputer = Get-ADComputer -Identity $env:COMPUTERNAME
+    $group = Get-ADGroup -Identity "SG-LDAPS-DomainController-AutoEnroll" -ErrorAction SilentlyContinue
+    
+    if (-not $group) {
+      Write-Warning "Group 'SG-LDAPS-DomainController-AutoEnroll' not found in domain"
+      Write-Output "SKIPPED: Group does not exist"
+    } else {
+      $members = Get-ADGroupMember -Identity $group
+      if ($members.DistinguishedName -contains $dcComputer.DistinguishedName) {
+        Write-Output "✓ Already member of SG-LDAPS-DomainController-AutoEnroll"
+      } else {
+        Add-ADGroupMember -Identity $group -Members $dcComputer
+        Write-Output "✓ Added to SG-LDAPS-DomainController-AutoEnroll"
+      }
+    }
+  register: ldaps_group
+  changed_when: "'Added' in ldaps_group.stdout"
+  failed_when: false
+
+- name: Trigger certificate auto-enrollment
+  win_shell: |
+    # Force Group Policy update
+    gpupdate /force | Out-Null
+    
+    # Trigger certificate enrollment
+    certutil -pulse
+    
+    Write-Output "✓ Certificate enrollment triggered"
+    Write-Output "⚠️  MANUAL ACTION: Verify certificate issued at go/incerts portal"
+  register: cert_enrollment
+  changed_when: false
+
+- name: Generate comprehensive final health report
+  win_shell: |
+    $report = @{
+      Hostname = $env:COMPUTERNAME
+      Domain = (Get-ADDomain).DNSRoot
+      Site = (Get-ADDomainController -Identity $env:COMPUTERNAME).Site
+      Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+      PromotionComplete = $true
+    }
+    
+    # AD Services
+    $adServices = Get-Service NTDS, DNS, Netlogon, W32Time, KDC
+    $report.ADServicesRunning = ($adServices | Where-Object {$_.Status -eq 'Running'}).Count
+    $report.ADServicesTotal = $adServices.Count
+    $report.AllADServicesHealthy = ($report.ADServicesRunning -eq $report.ADServicesTotal)
+    
+    # Replication Check
+    $replCheck = repadmin /showrepl 2>&1
+    $report.ReplicationHealthy = $replCheck -match "Last attempt.*was successful"
+    
+    # Replication Queue
+    $queueCheck = repadmin /queue 2>&1
+    $report.ReplicationQueueEmpty = $queueCheck -match "Queue contains 0"
+    
+    # Shares
+    $shares = Get-WmiObject win32_share | Where-Object {$_.Name -in @('SYSVOL', 'NETLOGON')}
+    $report.RequiredSharesPresent = ($shares.Count -eq 2)
+    
+    # DNS Conditional Forwarders
+    $forwarders = Get-DnsServerZone | Where-Object {$_.ZoneType -eq 'Forwarder'}
+    $report.ConditionalForwardersConfigured = $forwarders.Count
+    $report.ConditionalForwarderNames = ($forwarders.ZoneName -join ', ')
+    
+    # Agent Services
+    $agents = Get-Service -Name AzureADPasswordProtectionDCAgent, QualysAgent, NPSrvHost, HealthService, AATPSensor -ErrorAction SilentlyContinue
+    $report.AgentsInstalled = ($agents | Measure-Object).Count
+    $report.AgentsRunning = ($agents | Where-Object {$_.Status -eq 'Running'} | Measure-Object).Count
+    
+    # LDAPS Group Membership
+    try {
+      $dcComputer = Get-ADComputer -Identity $env:COMPUTERNAME -Properties MemberOf
+      $report.LDAPSGroupMember = ($dcComputer.MemberOf -match "SG-LDAPS-DomainController-AutoEnroll")
+    } catch {
+      $report.LDAPSGroupMember = "Unknown"
+    }
+    
+    # Authentication Events
+    $authEvents = Get-WinEvent -FilterHashtable @{
+      LogName='Security'
+      Id=4624,4768,4771
+      StartTime=(Get-Date).AddHours(-1)
+    } -MaxEvents 1 -ErrorAction SilentlyContinue
+    $report.AuthenticationActive = ($authEvents.Count -gt 0)
+    
+    $report | ConvertTo-Json -Depth 3
+  register: final_health_report
+  changed_when: false
+
+- name: Parse health report
+  set_fact:
+    health_data: "{{ final_health_report.stdout | from_json }}"
+
+- name: Display final health report
+  debug:
+    msg: |
+      ============================================
+      ✅ FINAL DEPLOYMENT REPORT
+      ============================================
+      Server: {{ health_data.Hostname }}
+      Domain: {{ health_data.Domain }}
+      Site: {{ health_data.Site }}
+      Completed: {{ health_data.Timestamp }}
+      
+      HEALTH STATUS:
+      - AD Services: {{ health_data.ADServicesRunning }}/{{ health_data.ADServicesTotal }} running
+      - Replication: {{ 'HEALTHY' if health_data.ReplicationHealthy else 'ISSUES DETECTED' }}
+      - Replication Queue: {{ 'EMPTY (OK)' if health_data.ReplicationQueueEmpty else 'PENDING ITEMS' }}
+      - SYSVOL/NETLOGON Shares: {{ 'PRESENT' if health_data.RequiredSharesPresent else 'MISSING' }}
+      - DNS Forwarders: {{ health_data.ConditionalForwardersConfigured }} configured
+      - Agents Installed: {{ health_data.AgentsInstalled }}
+      - Agents Running: {{ health_data.AgentsRunning }}
+      - LDAPS Group Member: {{ health_data.LDAPSGroupMember }}
+      - Authentication Active: {{ 'YES' if health_data.AuthenticationActive else 'MONITORING' }}
+      
+      ⚠️  MANUAL FOLLOW-UP REQUIRED:
+      1. Verify certificate issued: go/incerts
+      2. Confirm FIM compliance: Contact InfoSec SPM team
+         - Qualys agent version verified: {{ qualys_version_check.stdout | default('Check manually') }}
+      3. Update change ticket with completion details
+      4. Monitor agent initialization: 5-10 minutes
+      
+      For issues, contact: AD Operations Team
+      ============================================
+
+- name: Save deployment report to file
+  win_copy:
+    content: |
+      ============================================
+      LinkedIn DC Promotion - Deployment Report
+      ============================================
+      
+      Server: {{ health_data.Hostname }}
+      Domain: {{ health_data.Domain }}
+      Site: {{ health_data.Site }}
+      Promotion Completed: {{ health_data.Timestamp }}
+      
+      HEALTH STATUS:
+      ✓ AD Services: {{ health_data.ADServicesRunning }}/{{ health_data.ADServicesTotal }} running
+      ✓ Replication: {{ 'HEALTHY' if health_data.ReplicationHealthy else 'ISSUES' }}
+      ✓ Replication Queue: {{ 'EMPTY' if health_data.ReplicationQueueEmpty else 'PENDING' }}
+      ✓ SYSVOL/NETLOGON: {{ 'OK' if health_data.RequiredSharesPresent else 'MISSING' }}
+      ✓ DNS Forwarders: {{ health_data.ConditionalForwardersConfigured }} zones
+      ✓ Agents: {{ health_data.AgentsInstalled }} installed, {{ health_data.AgentsRunning }} running
+      ✓ LDAPS Group: {{ health_data.LDAPSGroupMember }}
+      ✓ Authentication: {{ 'ACTIVE' if health_data.AuthenticationActive else 'MONITORING' }}
+      
+      DNS CONDITIONAL FORWARDERS:
+      {{ health_data.ConditionalForwarderNames }}
+      
+      MANUAL STEPS REMAINING:
+      1. Certificate validation: go/incerts
+      2. InfoSec FIM compliance: Contact InfoSec SPM team
+      3. Change ticket update: Document completion
+      
+      Generated by: Ansible Automation
+      Date: {{ ansible_date_time.iso8601 }}
+      ============================================
+    dest: "C:\\Temp\\DC-Deployment-Report-{{ ansible_date_time.date }}.txt"

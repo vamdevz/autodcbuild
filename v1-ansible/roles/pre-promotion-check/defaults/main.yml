@@ -1,0 +1,11 @@
+---
+# Default variables for pre-promotion check
+
+# Primary DC for connectivity tests
+primary_dc_ip: "10.41.63.5"
+
+# Minimum disk space required (GB)
+min_disk_space_gb: 20
+
+# Required DNS servers (optional - will validate any DNS is configured)
+# required_dns_servers: []

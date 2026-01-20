@@ -1,0 +1,105 @@
+---
+# roles/dns-configuration/tasks/main.yml
+# Configure DNS conditional forwarders per LinkedIn network architecture
+
+- name: Create DNS Conditional Forwarder - internal.linkedin.cn (if BIZ domain)
+  win_shell: |
+    $zone = Get-DnsServerZone -Name "internal.linkedin.cn" -ErrorAction SilentlyContinue
+    if ($zone) {
+      Write-Output "Conditional forwarder for internal.linkedin.cn already exists"
+    } else {
+      Add-DnsServerConditionalForwarderZone `
+        -Name "internal.linkedin.cn" `
+        -MasterServers @("10.44.71.6", "10.44.71.5")
+      Write-Output "✓ Created conditional forwarder: internal.linkedin.cn"
+    }
+  when: domain_name == 'linkedin.biz'
+  register: cf_china
+  changed_when: "'Created' in cf_china.stdout"
+
+- name: Create DNS Conditional Forwarder - linkedin.biz (if China domain)
+  win_shell: |
+    $zone = Get-DnsServerZone -Name "linkedin.biz" -ErrorAction SilentlyContinue
+    if ($zone) {
+      Write-Output "Conditional forwarder for linkedin.biz already exists"
+    } else {
+      Add-DnsServerConditionalForwarderZone `
+        -Name "linkedin.biz" `
+        -MasterServers @("10.41.63.5", "10.41.63.6", "172.21.2.103", "172.21.2.104")
+      Write-Output "✓ Created conditional forwarder: linkedin.biz"
+    }
+  when: domain_name == 'internal.linkedin.cn'
+  register: cf_biz
+  changed_when: "'Created' in cf_biz.stdout"
+
+- name: Create DNS Conditional Forwarder - gtm.corp.microsoft.com
+  win_shell: |
+    $zone = Get-DnsServerZone -Name "gtm.corp.microsoft.com" -ErrorAction SilentlyContinue
+    if ($zone) {
+      Write-Output "Conditional forwarder for gtm.corp.microsoft.com already exists"
+    } else {
+      Add-DnsServerConditionalForwarderZone `
+        -Name "gtm.corp.microsoft.com" `
+        -MasterServers @("172.31.197.245", "172.31.197.246", "172.31.197.80", "172.31.197.81")
+      Write-Output "✓ Created conditional forwarder: gtm.corp.microsoft.com"
+    }
+  register: cf_gtm
+  changed_when: "'Created' in cf_gtm.stdout"
+
+- name: Create DNS Conditional Forwarder - sts.microsoft.com
+  win_shell: |
+    $zone = Get-DnsServerZone -Name "sts.microsoft.com" -ErrorAction SilentlyContinue
+    if ($zone) {
+      Write-Output "Conditional forwarder for sts.microsoft.com already exists"
+    } else {
+      Add-DnsServerConditionalForwarderZone `
+        -Name "sts.microsoft.com" `
+        -MasterServers @("172.31.197.245", "172.31.197.246", "172.31.197.80", "172.31.197.81")
+      Write-Output "✓ Created conditional forwarder: sts.microsoft.com"
+    }
+  register: cf_sts
+  changed_when: "'Created' in cf_sts.stdout"
+
+- name: Verify DNS resolution - msft.sts.microsoft.com
+  win_shell: |
+    $result = Resolve-DnsName -Name "msft.sts.microsoft.com" -ErrorAction Stop
+    Write-Output "✓ msft.sts.microsoft.com resolves to: $($result.IPAddress -join ', ')"
+  register: nslookup_msft
+  changed_when: false
+  retries: 3
+  delay: 30
+  until: nslookup_msft is succeeded
+
+- name: Verify DNS resolution - linkedin.biz (if in China domain)
+  win_shell: |
+    $result = Resolve-DnsName -Name "linkedin.biz" -ErrorAction Stop
+    Write-Output "✓ linkedin.biz resolves to: $($result.IPAddress -join ', ')"
+  register: nslookup_biz
+  changed_when: false
+  when: domain_name == 'internal.linkedin.cn'
+
+- name: Verify DNS resolution - internal.linkedin.cn (if in BIZ domain)
+  win_shell: |
+    $result = Resolve-DnsName -Name "internal.linkedin.cn" -ErrorAction Stop
+    Write-Output "✓ internal.linkedin.cn resolves to: $($result.IPAddress -join ', ')"
+  register: nslookup_china
+  changed_when: false
+  when: domain_name == 'linkedin.biz'
+
+- name: DNS configuration summary
+  debug:
+    msg: |
+      ============================================
+      ✅ DNS CONFIGURATION COMPLETE
+      ============================================
+      Conditional Forwarders Created:
+      {% if domain_name == 'linkedin.biz' %}
+      - internal.linkedin.cn → 10.44.71.6, 10.44.71.5
+      {% else %}
+      - linkedin.biz → 10.41.63.5, 10.41.63.6, 172.21.2.103, 172.21.2.104
+      {% endif %}
+      - gtm.corp.microsoft.com → 172.31.197.245, 172.31.197.246, 172.31.197.80, 172.31.197.81
+      - sts.microsoft.com → 172.31.197.245, 172.31.197.246, 172.31.197.80, 172.31.197.81
+      
+      DNS Resolution Tests: PASS
+      ============================================

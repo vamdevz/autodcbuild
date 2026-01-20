@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IaC DC Promotion Infographic</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #FDF4FF; /* Very soft pink/white */
+        }
+        .banana-bg { background-color: #FFE600; }
+        .banana-border { border-color: #FFE600; }
+        .charcoal-text { color: #1A1A1A; }
+        .charcoal-bg { background-color: #1A1A1A; }
+        .card-shadow { box-shadow: 0 10px 30px -10px rgba(0,0,0,0.1); }
+        .connector-line {
+            width: 4px;
+            background: repeating-linear-gradient(to bottom, #FFE600, #FFE600 10px, transparent 10px, transparent 20px);
+        }
+    </style>
+</head>
+<body class="p-10 flex flex-col items-center">
+
+    <!-- Header Section -->
+    <div class="max-w-4xl w-full text-center mb-12">
+        <div class="inline-block banana-bg charcoal-text px-4 py-1 rounded-full text-sm font-extrabold tracking-widest uppercase mb-4">
+            Infrastructure Automation
+        </div>
+        <h1 class="text-5xl font-extrabold charcoal-text tracking-tight">
+            DC Build & Promotion <br/>
+            <span class="text-gray-400">through IaC</span>
+        </h1>
+    </div>
+
+    <div class="max-w-2xl w-full relative flex flex-col items-center">
+        
+        <!-- Step 1: Euclid -->
+        <div class="z-10 w-full flex justify-center mb-16">
+            <div class="banana-bg p-8 rounded-[2rem] card-shadow flex items-center gap-6 border-4 border-white w-full max-w-md">
+                <div class="charcoal-bg p-4 rounded-2xl text-white">
+                    <i data-lucide="cloud-lightning" size="32"></i>
+                </div>
+                <div>
+                    <h2 class="text-xl font-extrabold charcoal-text leading-tight">Infra Team (Euclid)</h2>
+                    <p class="text-sm font-bold opacity-70 italic">VM Provisioning</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Connector -->
+        <div class="absolute top-24 bottom-24 connector-line opacity-50"></div>
+
+        <!-- Step 2: Ansible Control Node -->
+        <div class="z-10 w-full flex justify-center mb-16">
+            <div class="bg-white p-2 rounded-[3rem] card-shadow border-4 border-yellow-400 w-full max-w-lg">
+                <div class="charcoal-bg p-10 rounded-[2.5rem] text-white">
+                    <div class="flex items-center gap-4 mb-8">
+                        <div class="banana-bg p-3 rounded-xl text-black">
+                            <i data-lucide="terminal" size="28"></i>
+                        </div>
+                        <h2 class="text-2xl font-extrabold">Ansible Control Node</h2>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 gap-4">
+                        <div class="flex items-center gap-4 bg-white/10 p-4 rounded-2xl border border-white/5">
+                            <i data-lucide="shield-check" class="text-yellow-400"></i>
+                            <span class="font-semibold text-sm">Promote to AD DC</span>
+                        </div>
+                        <div class="flex items-center gap-4 bg-white/10 p-4 rounded-2xl border border-white/5">
+                            <i data-lucide="refresh-cw" class="text-yellow-400"></i>
+                            <span class="font-semibold text-sm">Reboot Handling (Wait for WinRM)</span>
+                        </div>
+                        <div class="flex items-center gap-4 bg-white/10 p-4 rounded-2xl border border-white/5">
+                            <i data-lucide="list-checks" class="text-yellow-400"></i>
+                            <span class="font-semibold text-sm">Role & Health Verification</span>
+                        </div>
+                        <div class="flex items-center gap-4 bg-white/10 p-4 rounded-2xl border border-white/5">
+                            <i data-lucide="activity" class="text-yellow-400"></i>
+                            <span class="font-semibold text-sm">Trigger DSC Configurations</span>
+                        </div>
+                        <div class="flex items-center gap-4 bg-white/10 p-4 rounded-2xl border border-white/5">
+                            <i data-lucide="lock" class="text-yellow-400"></i>
+                            <span class="font-semibold text-sm">Security: Install MMA / Qualys</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 3: Result -->
+        <div class="z-10 w-full flex justify-center">
+            <div class="banana-bg p-8 rounded-[2rem] card-shadow flex items-center gap-6 border-4 border-white w-full max-w-md">
+                <div class="charcoal-bg p-4 rounded-2xl text-white">
+                    <i data-lucide="server" size="32"></i>
+                </div>
+                <div>
+                    <h2 class="text-xl font-extrabold charcoal-text leading-tight">Windows AD DS</h2>
+                    <p class="text-sm font-bold opacity-70 italic">Final Domain Controller</p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="mt-16 text-gray-400 text-xs font-bold tracking-widest uppercase">
+        Built with Gemini-3-Flash &bull; Nano Banana Theme
+    </div>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

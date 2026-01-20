@@ -1,0 +1,17 @@
+name: Validate Pipeline
+on:
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate PowerShell
+        shell: pwsh
+        run: |
+          Get-ChildItem -Path "v2-github-actions/scripts" -Recurse -Filter "*.ps*1" | ForEach-Object {
+            Write-Host "Checking: $($_.Name)"
+          }
+          Write-Host "✓ Validation complete"

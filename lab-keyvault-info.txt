@@ -1,0 +1,27 @@
+# Azure Key Vault - Lab Environment
+# Created: 2026-01-19
+
+## Key Vault Details
+- Name: kv-dclab-0119
+- Resource Group: VAMDEVTEST
+- Location: uksouth
+- URI: https://kv-dclab-0119.vault.azure.net/
+
+## Stored Secrets
+1. DomainAdminUsername = linkedin\vamdev
+2. DomainAdminPassword = Sarita123@@@
+3. SafeModePassword = Sarita123@@@
+
+## GitHub Secrets Required
+Add these to your GitHub repository secrets:
+- KEY_VAULT_NAME = kv-dclab-0119
+- AZURE_TENANT_ID = 0d9e3fa8-707c-4e1a-8885-aa65b35ad4b5
+- AZURE_SUBSCRIPTION_ID = 81adc0ae-0abb-443d-9b8b-05cb650a2d46
+- AZURE_CLIENT_ID = (from your Azure AD App Registration)
+
+## Usage
+In GitHub Actions workflow:
+  KeyVaultName: ${{ secrets.KEY_VAULT_NAME }}
+
+In PowerShell:
+  Get-AzKeyVaultSecret -VaultName "kv-dclab-0119" -Name "DomainAdminUsername"

@@ -1,0 +1,23 @@
+{
+  "environment": "lab",
+  "domain_name": "linkedin.local",
+  "primary_dc_ip": "10.0.0.4",
+  "ad_site_name": "Lab-Site",
+  "target_host": "dc01.linkedin.local",
+  "required_drives": ["C", "D"],
+  "min_disk_space_gb": 20,
+  "dns_forwarders": {
+    "": []
+  },
+  "skip_agents": true,
+  "skip_ldaps_group": true,
+  "lab_mode": true,
+  "comments": {
+    "description": "Isolated Azure lab environment for testing DC promotion pipeline",
+    "domain": "linkedin.local (isolated)",
+    "primary_dc": "dc01.linkedin.local",
+    "skip_agents": "Set to true to skip enterprise agent installation in lab",
+    "skip_ldaps_group": "Set to true as LDAPS auto-enrollment may not exist in lab",
+    "lab_mode": "Enables relaxed validation for lab testing"
+  }
+}

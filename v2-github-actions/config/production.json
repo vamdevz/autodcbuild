@@ -1,0 +1,16 @@
+{
+  "environment": "production",
+  "domain_name": "linkedin.biz",
+  "primary_dc_ip": "10.41.63.5",
+  "ad_site_name": "LVA1",
+  "target_host": "lva1-dc03.linkedin.biz",
+  "required_drives": ["D", "E"],
+  "min_disk_space_gb": 50,
+  "dns_forwarders": {
+    "internal.linkedin.cn": ["10.44.71.6", "10.44.71.5"],
+    "gtm.corp.microsoft.com": ["172.31.197.245", "172.31.197.246", "172.31.197.80", "172.31.197.81"],
+    "sts.microsoft.com": ["172.31.197.245", "172.31.197.246", "172.31.197.80", "172.31.197.81"]
+  },
+  "biz_dcs": ["lva1-dc01", "lva1-dc02", "lva1-dc03"],
+  "china_dcs": ["sha1-dc01", "sha1-dc02"]
+}
