@@ -143,11 +143,13 @@ jobs:
           echo "⏳ This will take 10-15 minutes..."
           echo ""
           
-          # Create PowerShell script for DC promotion
+          # Create PowerShell script for DC promotion (using working format from manual test)
           cat > /tmp/promote-dc.ps1 << 'EOFPS1'
           param($DomainPass, $SafePass)
           
           try {
+            Import-Module ADDSDeployment
+            
             # Use full domain format: linkedin.local\vamdev
             $domainSecure = ConvertTo-SecureString $DomainPass -AsPlainText -Force
             $domainCred = New-Object System.Management.Automation.PSCredential("linkedin.local\vamdev", $domainSecure)
@@ -155,18 +157,23 @@ jobs:
             $safeModeSecure = ConvertTo-SecureString $SafePass -AsPlainText -Force
             
             Write-Host "Starting DC promotion with user: linkedin.local\vamdev" -ForegroundColor Cyan
-            Write-Host "Replication source: DC01.linkedin.local" -ForegroundColor Yellow
+            Write-Host "Using working script format from manual test" -ForegroundColor Yellow
             Write-Host ""
             
             Install-ADDSDomainController `
-              -DomainName "linkedin.local" `
-              -Credential $domainCred `
-              -ReplicationSourceDC "DC01.linkedin.local" `
-              -SiteName "Default-First-Site-Name" `
-              -InstallDns:$true `
+              -NoGlobalCatalog:$false `
               -CreateDnsDelegation:$false `
+              -Credential $domainCred `
+              -CriticalReplicationOnly:$false `
+              -DatabasePath "C:\Windows\NTDS" `
+              -DomainName "Linkedin.local" `
+              -InstallDns:$true `
+              -LogPath "C:\Windows\NTDS" `
+              -NoRebootOnCompletion:$false `
+              -SiteName "Default-First-Site-Name" `
+              -SysvolPath "C:\Windows\SYSVOL" `
               -SafeModeAdministratorPassword $safeModeSecure `
-              -NoRebootOnCompletion:$false
+              -Force:$true
               
             Write-Host "✅ DC PROMOTION COMPLETED" -ForegroundColor Green
             
