@@ -163,11 +163,11 @@ jobs:
               -Credential $domainCred `
               -ReplicationSourceDC "DC01.linkedin.local" `
               -SiteName "Default-First-Site-Name" `
-              -InstallDns:$true `
+              -InstallDns `
+              -CreateDnsDelegation:$false `
               -SafeModeAdministratorPassword $safeModeSecure `
-              -Force:$true `
+              -Force `
               -NoRebootOnCompletion:$false `
-              -Confirm:$false `
               -ErrorAction Stop
               
             Write-Host "✅ DC PROMOTION COMPLETED" -ForegroundColor Green
