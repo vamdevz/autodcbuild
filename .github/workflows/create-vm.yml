@@ -42,7 +42,7 @@ jobs:
           RG="VAMDEVTEST"
           VNET="DC01-vnet"
           SUBNET="default"
-          LOCATION="$(az group show --name "$RG" --query location -o tsv)"
+          LOCATION="uksouth"  # Same region as DC01 and DC01-vnet
           NSG_NAME="${VM_NAME}-nsg"
           PIP_NAME="${VM_NAME}-pip"
           NIC_NAME="${VM_NAME}-nic"
