@@ -40,7 +40,7 @@ jobs:
           set -euo pipefail
 
           RG="VAMDEVTEST"
-          VNET="DC02-vnet"
+          VNET="DC01-vnet"
           SUBNET="default"
           LOCATION="$(az group show --name "$RG" --query location -o tsv)"
           NSG_NAME="${VM_NAME}-nsg"
