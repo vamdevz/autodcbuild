@@ -100,21 +100,24 @@ jobs:
             Write-Host "✅ AD DS Role installed" -ForegroundColor Green
             Write-Host ""
 
-            Write-Host "🚀 Promoting to Domain Controller..." -ForegroundColor Cyan
+            Write-Host "🚀 Adding DC to existing domain (linkedin.local)..." -ForegroundColor Cyan
             Write-Host "⏳ This will take 10-15 minutes..." -ForegroundColor Yellow
             Write-Host ""
             
-            Invoke-Command -Session $session -ArgumentList $safeModePassword -ScriptBlock {
-              param($SafeModePwd)
-              Install-ADDSForest `
+            $result = Invoke-Command -Session $session -ArgumentList $safeModePassword, $credential -ScriptBlock {
+              param($SafeModePwd, $DomainCred)
+              Install-ADDSDomainController `
                 -DomainName "linkedin.local" `
-                -DomainNetbiosName "LINKEDIN" `
-                -ForestMode "WinThreshold" `
-                -DomainMode "WinThreshold" `
+                -Credential $DomainCred `
                 -InstallDns:$true `
                 -SafeModeAdministratorPassword $SafeModePwd `
                 -Force:$true `
-                -NoRebootOnCompletion:$false
+                -NoRebootOnCompletion:$false `
+                -Confirm:$false
+            }
+            
+            if ($result) {
+              Write-Host "✅ DC promotion command executed successfully" -ForegroundColor Green
             }
 
             Write-Host ""
