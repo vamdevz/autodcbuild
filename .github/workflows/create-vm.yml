@@ -1,0 +1,169 @@
+name: Create Lab VM
+
+on:
+  workflow_dispatch:
+    inputs:
+      vm_name:
+        description: "Name for the new Windows Server VM"
+        required: true
+        type: string
+      admin_username:
+        description: "Local admin username for the VM"
+        required: false
+        type: string
+        default: "azureuser"
+
+jobs:
+  create-vm:
+    runs-on: ubuntu-latest
+    outputs:
+      vm_name: ${{ steps.outputs.outputs.vm_name }}
+      vm_ip: ${{ steps.outputs.outputs.vm_ip }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+
+      - name: Create VM
+        id: create
+        shell: bash
+        env:
+          VM_NAME: ${{ inputs.vm_name }}
+          ADMIN_USERNAME: ${{ inputs.admin_username }}
+          ADMIN_PASSWORD: ${{ secrets.DOMAIN_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          RG="VAMDEVTEST"
+          VNET="DC02-vnet"
+          SUBNET="default"
+          LOCATION="$(az group show --name "$RG" --query location -o tsv)"
+          NSG_NAME="${VM_NAME}-nsg"
+          PIP_NAME="${VM_NAME}-pip"
+          NIC_NAME="${VM_NAME}-nic"
+
+          echo "Resource Group: $RG"
+          echo "Location: $LOCATION"
+          echo "VM Name: $VM_NAME"
+
+          echo "Creating NSG..."
+          az network nsg create \
+            --resource-group "$RG" \
+            --name "$NSG_NAME" \
+            --location "$LOCATION" \
+            --only-show-errors
+
+          echo "Allowing WinRM (5985) and RDP (3389) from Internet (lab only)..."
+          az network nsg rule create \
+            --resource-group "$RG" \
+            --nsg-name "$NSG_NAME" \
+            --name "allow-winrm-5985" \
+            --priority 1000 \
+            --protocol Tcp \
+            --access Allow \
+            --direction Inbound \
+            --source-address-prefixes Internet \
+            --source-port-ranges "*" \
+            --destination-address-prefixes "*" \
+            --destination-port-ranges 5985 \
+            --only-show-errors
+
+          az network nsg rule create \
+            --resource-group "$RG" \
+            --nsg-name "$NSG_NAME" \
+            --name "allow-rdp-3389" \
+            --priority 1010 \
+            --protocol Tcp \
+            --access Allow \
+            --direction Inbound \
+            --source-address-prefixes Internet \
+            --source-port-ranges "*" \
+            --destination-address-prefixes "*" \
+            --destination-port-ranges 3389 \
+            --only-show-errors
+
+          echo "Creating Public IP..."
+          az network public-ip create \
+            --resource-group "$RG" \
+            --name "$PIP_NAME" \
+            --sku Standard \
+            --allocation-method Static \
+            --only-show-errors
+
+          echo "Creating NIC..."
+          az network nic create \
+            --resource-group "$RG" \
+            --name "$NIC_NAME" \
+            --vnet-name "$VNET" \
+            --subnet "$SUBNET" \
+            --network-security-group "$NSG_NAME" \
+            --public-ip-address "$PIP_NAME" \
+            --only-show-errors
+
+          echo "Creating VM..."
+          az vm create \
+            --resource-group "$RG" \
+            --name "$VM_NAME" \
+            --location "$LOCATION" \
+            --nics "$NIC_NAME" \
+            --image "MicrosoftWindowsServer:WindowsServer:2019-datacenter-gensecond:latest" \
+            --size "Standard_D2as_v5" \
+            --admin-username "$ADMIN_USERNAME" \
+            --admin-password "$ADMIN_PASSWORD" \
+            --os-disk-size-gb 127 \
+            --enable-agent true \
+            --only-show-errors
+
+          echo "Waiting for VM to finish provisioning..."
+          az vm wait --created --resource-group "$RG" --name "$VM_NAME"
+
+          echo "Enabling WinRM via Run Command..."
+          az vm run-command invoke \
+            --resource-group "$RG" \
+            --name "$VM_NAME" \
+            --command-id RunPowerShellScript \
+            --scripts @v2-github-actions/scripts/setup-winrm.ps1 \
+            --only-show-errors
+
+          PUBLIC_IP="$(az network public-ip show --resource-group "$RG" --name "$PIP_NAME" --query ipAddress -o tsv)"
+
+          echo "VM Public IP: $PUBLIC_IP"
+          echo "vm_name=$VM_NAME" >> "$GITHUB_OUTPUT"
+          echo "vm_ip=$PUBLIC_IP" >> "$GITHUB_OUTPUT"
+
+      - name: Test WinRM connectivity
+        shell: pwsh
+        run: |
+          Write-Host "Testing WinRM connectivity to ${{ steps.create.outputs.vm_ip }}..." -ForegroundColor Cyan
+          try {
+            Test-Connection -TargetName "${{ steps.create.outputs.vm_ip }}" -TCPPort 5985 -Count 1 -ErrorAction Stop
+            Write-Host "WinRM port 5985 is reachable" -ForegroundColor Green
+          } catch {
+            Write-Host "WinRM port 5985 is not reachable: $_" -ForegroundColor Red
+            exit 1
+          }
+
+      - name: Outputs
+        id: outputs
+        run: |
+          echo "vm_name=${{ steps.create.outputs.vm_name }}" >> "$GITHUB_OUTPUT"
+          echo "vm_ip=${{ steps.create.outputs.vm_ip }}" >> "$GITHUB_OUTPUT"
+
+      - name: Write VM details artifact
+        run: |
+          echo "vm_name=${{ steps.create.outputs.vm_name }}" > vm-details.txt
+          echo "vm_ip=${{ steps.create.outputs.vm_ip }}" >> vm-details.txt
+
+      - name: Upload VM details
+        uses: actions/upload-artifact@v4
+        with:
+          name: vm-details
+          path: vm-details.txt

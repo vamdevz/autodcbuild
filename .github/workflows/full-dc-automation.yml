@@ -1,0 +1,89 @@
+name: Full DC Automation
+
+on:
+  workflow_dispatch:
+    inputs:
+      vm_name:
+        description: "Name for the new Windows Server VM"
+        required: true
+        type: string
+      admin_username:
+        description: "Local admin username for the VM"
+        required: false
+        type: string
+        default: "azureuser"
+      skip_validation:
+        description: "Skip pre-promotion checks"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  create-vm:
+    runs-on: ubuntu-latest
+    outputs:
+      vm_name: ${{ steps.outputs.outputs.vm_name }}
+      vm_ip: ${{ steps.outputs.outputs.vm_ip }}
+    steps:
+      - name: Trigger VM creation workflow
+        id: trigger
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run create-vm.yml \
+            --repo "${{ github.repository }}" \
+            -f vm_name="${{ inputs.vm_name }}" \
+            -f admin_username="${{ inputs.admin_username }}"
+
+      - name: Wait for VM creation workflow
+        id: wait
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "Waiting for create-vm.yml to finish..."
+          RUN_ID="$(gh run list --workflow=create-vm.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
+          echo "Latest create-vm run: $RUN_ID"
+          gh run watch "$RUN_ID" --exit-status
+
+      - name: Download VM details
+        id: download
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          RUN_ID="$(gh run list --workflow=create-vm.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
+          gh run view "$RUN_ID" --json jobs --jq '.jobs[0].steps[] | select(.name=="Outputs").number' > /tmp/step.txt || true
+          gh run download "$RUN_ID" --name vm-details || true
+
+      - name: Set outputs
+        id: outputs
+        run: |
+          if [ -f vm-details.txt ]; then
+            cat vm-details.txt
+            VM_NAME="$(grep '^vm_name=' vm-details.txt | cut -d= -f2)"
+            VM_IP="$(grep '^vm_ip=' vm-details.txt | cut -d= -f2)"
+          else
+            echo "vm-details.txt not found, using latest VM outputs from workflow run"
+            VM_NAME="${{ inputs.vm_name }}"
+            VM_IP=""
+          fi
+          echo "vm_name=$VM_NAME" >> "$GITHUB_OUTPUT"
+          echo "vm_ip=$VM_IP" >> "$GITHUB_OUTPUT"
+
+  promote-dc:
+    needs: create-vm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger DC promotion
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -z "${{ needs.create-vm.outputs.vm_ip }}" ]; then
+            echo "VM IP is missing. Cannot trigger DC promotion."
+            exit 1
+          fi
+          gh workflow run deploy-lab.yml \
+            --repo "${{ github.repository }}" \
+            -f target_dc="${{ needs.create-vm.outputs.vm_ip }}" \
+            -f skip_validation="${{ inputs.skip_validation }}"

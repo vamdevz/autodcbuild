@@ -1,81 +1,161 @@
-name: Deploy to Lab
+name: Deploy to Lab (GitHub-Hosted Runner)
 
 on:
   workflow_dispatch:
     inputs:
       target_dc:
-        description: 'Target DC hostname (e.g., dc01.linkedin.local)'
+        description: "Target DC IP or hostname"
         required: true
         type: string
-        default: 'dc01.linkedin.local'
+        default: "4.234.159.63"
       skip_validation:
-        description: 'Skip pre-promotion checks (for testing)'
+        description: "Skip pre-promotion checks"
         required: false
         type: boolean
         default: false
 
 jobs:
   deploy:
-    runs-on: self-hosted
-    environment: lab
-    
+    runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
-      - name: Azure Login via OIDC
-        uses: azure/login@v1
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      
-      - name: Run DC Promotion Pipeline (Lab)
+
+      - name: Install PowerShell modules
         shell: pwsh
         run: |
-          Write-Host "🧪 Running DC Promotion in LAB environment" -ForegroundColor Cyan
+          Write-Host "Installing PSWSMan for cross-platform WinRM support..." -ForegroundColor Cyan
+          Install-Module -Name PSWSMan -Scope CurrentUser -Force -AllowClobber
+
+          Write-Host "Installing WSMan client..." -ForegroundColor Cyan
+          sudo $(which pwsh) -Command 'Import-Module PSWSMan; Install-WSMan'
+
+          Write-Host "PowerShell modules installed" -ForegroundColor Green
+
+      - name: Test connectivity to target DC
+        shell: pwsh
+        run: |
+          Write-Host "Testing connectivity to ${{ inputs.target_dc }}..." -ForegroundColor Cyan
+
+          try {
+            Test-Connection -TargetName "${{ inputs.target_dc }}" -TCPPort 5985 -Count 1 -ErrorAction Stop
+            Write-Host "WinRM port 5985 is reachable" -ForegroundColor Green
+          } catch {
+            Write-Host "Cannot reach WinRM port 5985: $_" -ForegroundColor Red
+            exit 1
+          }
+
+      - name: Run DC Promotion Pipeline
+        shell: pwsh
+        env:
+          DOMAIN_ADMIN_USER: ${{ secrets.DOMAIN_ADMIN_USERNAME }}
+          DOMAIN_ADMIN_PASS: ${{ secrets.DOMAIN_ADMIN_PASSWORD }}
+          SAFE_MODE_PASS: ${{ secrets.SAFE_MODE_PASSWORD }}
+        run: |
+          Write-Host "========================================" -ForegroundColor Cyan
+          Write-Host "  DC Promotion Pipeline - Lab" -ForegroundColor Cyan
+          Write-Host "========================================" -ForegroundColor Cyan
+          Write-Host ""
           Write-Host "Target DC: ${{ inputs.target_dc }}" -ForegroundColor Yellow
           Write-Host "Skip Validation: ${{ inputs.skip_validation }}" -ForegroundColor Yellow
           Write-Host ""
-          
+
           cd v2-github-actions/scripts
-          
-          $params = @{
-            Environment = "lab"
-            TargetDC = "${{ inputs.target_dc }}"
-            KeyVaultName = "${{ secrets.KEY_VAULT_NAME }}"
-            Verbose = $true
+
+          Write-Host "Importing PowerShell modules..." -ForegroundColor Cyan
+          Import-Module ./modules/PrePromotionChecks.psm1 -Force
+          Import-Module ./modules/DCPromotion.psm1 -Force
+          Import-Module ./modules/PostConfiguration.psm1 -Force
+          Write-Host "Modules imported" -ForegroundColor Green
+          Write-Host ""
+
+          $securePassword = ConvertTo-SecureString $env:DOMAIN_ADMIN_PASS -AsPlainText -Force
+          $credential = New-Object System.Management.Automation.PSCredential($env:DOMAIN_ADMIN_USER, $securePassword)
+
+          Write-Host "Configuring WinRM session options..." -ForegroundColor Cyan
+          $sessionOption = New-PSSessionOption -SkipCACheck -SkipCNCheck
+          Write-Host "WinRM configured" -ForegroundColor Green
+          Write-Host ""
+
+          try {
+            if ("${{ inputs.skip_validation }}" -ne "true") {
+              Write-Host "========================================" -ForegroundColor Cyan
+              Write-Host "  Phase 1: Pre-Promotion Validation" -ForegroundColor Cyan
+              Write-Host "========================================" -ForegroundColor Cyan
+              Write-Host ""
+
+              $preCheckResult = Invoke-AllPreChecks -TargetDC "${{ inputs.target_dc }}" -Credential $credential
+
+              if (-not $preCheckResult) {
+                Write-Host "Pre-checks failed" -ForegroundColor Red
+                exit 1
+              }
+
+              Write-Host "All pre-checks passed" -ForegroundColor Green
+              Write-Host ""
+            } else {
+              Write-Host "Skipping pre-checks" -ForegroundColor Yellow
+              Write-Host ""
+            }
+
+            Write-Host "========================================" -ForegroundColor Cyan
+            Write-Host "  Phase 2: Domain Controller Promotion" -ForegroundColor Cyan
+            Write-Host "========================================" -ForegroundColor Cyan
+            Write-Host ""
+
+            $safeModeSecure = ConvertTo-SecureString $env:SAFE_MODE_PASS -AsPlainText -Force
+
+            $promotionParams = @{
+              TargetDC = "${{ inputs.target_dc }}"
+              Credential = $credential
+              SafeModePassword = $safeModeSecure
+              DomainName = "linkedin.local"
+              SessionOption = $sessionOption
+            }
+
+            $dcResult = Invoke-FullPromotion @promotionParams
+
+            if (-not $dcResult) {
+              Write-Host "DC Promotion failed" -ForegroundColor Red
+              exit 1
+            }
+
+            Write-Host "DC Promotion completed successfully" -ForegroundColor Green
+            Write-Host ""
+
+            Write-Host "========================================" -ForegroundColor Cyan
+            Write-Host "  Phase 3: Post-Configuration" -ForegroundColor Cyan
+            Write-Host "========================================" -ForegroundColor Cyan
+            Write-Host ""
+
+            $postConfigParams = @{
+              TargetDC = "${{ inputs.target_dc }}"
+              Credential = $credential
+              SkipAgents = $true
+              SkipLDAPSGroup = $true
+              SessionOption = $sessionOption
+            }
+
+            Invoke-PostConfiguration @postConfigParams
+
+            Write-Host "Post-configuration completed" -ForegroundColor Green
+            Write-Host ""
+
+            Write-Host "========================================" -ForegroundColor Green
+            Write-Host "  DC PROMOTION COMPLETED SUCCESSFULLY" -ForegroundColor Green
+            Write-Host "========================================" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "Domain Controller: ${{ inputs.target_dc }}" -ForegroundColor White
+            Write-Host "Domain: linkedin.local" -ForegroundColor White
+            Write-Host ""
+
+          } catch {
+            Write-Host "========================================" -ForegroundColor Red
+            Write-Host "  DEPLOYMENT FAILED" -ForegroundColor Red
+            Write-Host "========================================" -ForegroundColor Red
+            Write-Host ""
+            Write-Host ("Error: {0}" -f $_.Exception.Message) -ForegroundColor Red
+            Write-Host ""
+            exit 1
           }
-          
-          if ("${{ inputs.skip_validation }}" -eq "true") {
-            $params['SkipPreChecks'] = $true
-          }
-          
-          .\Invoke-DCPromotionPipeline.ps1 @params
-      
-      - name: Upload Deployment Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: lab-deployment-report-${{ github.run_number }}
-          path: C:\Temp\DC-Deployment-Report-*.txt
-          if-no-files-found: warn
-      
-      - name: Lab Deployment Summary
-        if: always()
-        run: |
-          Write-Host ""
-          Write-Host "================================" -ForegroundColor Cyan
-          Write-Host "  Lab Deployment Complete" -ForegroundColor Green
-          Write-Host "================================" -ForegroundColor Cyan
-          Write-Host ""
-          Write-Host "Environment: LAB" -ForegroundColor Yellow
-          Write-Host "Target DC: ${{ inputs.target_dc }}" -ForegroundColor Yellow
-          Write-Host "Run Number: ${{ github.run_number }}" -ForegroundColor Yellow
-          Write-Host ""
-          Write-Host "Next Steps:" -ForegroundColor Cyan
-          Write-Host "  1. Review deployment report artifact" -ForegroundColor White
-          Write-Host "  2. Verify DC health checks" -ForegroundColor White
-          Write-Host "  3. Test replication and DNS" -ForegroundColor White
-          Write-Host "  4. Once validated, proceed to staging" -ForegroundColor White
-          Write-Host ""
