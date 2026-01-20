@@ -140,13 +140,44 @@ jobs:
 
       - name: Test WinRM connectivity
         shell: pwsh
+        env:
+          VM_IP: ${{ steps.create.outputs.vm_ip }}
+          ADMIN_USER: ${{ inputs.admin_username }}
+          ADMIN_PASS: ${{ secrets.DOMAIN_ADMIN_PASSWORD }}
         run: |
-          Write-Host "Testing WinRM connectivity to ${{ steps.create.outputs.vm_ip }}..." -ForegroundColor Cyan
-          try {
-            Test-Connection -TargetName "${{ steps.create.outputs.vm_ip }}" -TCPPort 5985 -Count 1 -ErrorAction Stop
-            Write-Host "WinRM port 5985 is reachable" -ForegroundColor Green
-          } catch {
-            Write-Host "WinRM port 5985 is not reachable: $_" -ForegroundColor Red
+          Write-Host "Testing WinRM connectivity to $env:VM_IP..." -ForegroundColor Cyan
+          Write-Host "Waiting 30 seconds for WinRM to be fully ready..." -ForegroundColor Yellow
+          Start-Sleep -Seconds 30
+          
+          $securePassword = ConvertTo-SecureString $env:ADMIN_PASS -AsPlainText -Force
+          $credential = New-Object System.Management.Automation.PSCredential($env:ADMIN_USER, $securePassword)
+          
+          $maxRetries = 5
+          $retryCount = 0
+          $connected = $false
+          
+          while (-not $connected -and $retryCount -lt $maxRetries) {
+            $retryCount++
+            Write-Host "Attempt $retryCount/$maxRetries..." -ForegroundColor Cyan
+            
+            try {
+              $session = New-PSSession -ComputerName $env:VM_IP -Credential $credential -SessionOption (New-PSSessionOption -SkipCACheck -SkipCNCheck) -ErrorAction Stop
+              $result = Invoke-Command -Session $session -ScriptBlock { $env:COMPUTERNAME }
+              Remove-PSSession -Session $session
+              
+              Write-Host "✅ WinRM connection successful! Computer: $result" -ForegroundColor Green
+              $connected = $true
+            } catch {
+              Write-Host "⚠️  Connection failed: $($_.Exception.Message)" -ForegroundColor Yellow
+              if ($retryCount -lt $maxRetries) {
+                Write-Host "Waiting 30 seconds before retry..." -ForegroundColor Yellow
+                Start-Sleep -Seconds 30
+              }
+            }
+          }
+          
+          if (-not $connected) {
+            Write-Host "❌ Failed to establish WinRM connection after $maxRetries attempts" -ForegroundColor Red
             exit 1
           }
 
