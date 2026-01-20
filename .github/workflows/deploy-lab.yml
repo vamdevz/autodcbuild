@@ -92,25 +92,39 @@ jobs:
             exit 1
           fi
 
-      - name: Configure DNS
+      - name: Prepare VM for Domain Join
         shell: bash
         env:
           VM_NAME: ${{ inputs.vm_name }}
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  Configuring DNS on $VM_NAME"
+          echo "  Preparing $VM_NAME for Domain Join"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
-          echo "Setting DNS to point to DC01 (10.0.0.6)..."
+          
+          cat > /tmp/prepare-vm.ps1 << 'EOFPS1'
+          # Configure DNS to point to DC01
+          Write-Host "[1/2] Configuring DNS..." -ForegroundColor Cyan
+          Set-DnsClientServerAddress -InterfaceAlias 'Ethernet*' -ServerAddresses 10.0.0.6,8.8.8.8
+          Write-Host "DNS Servers:" -ForegroundColor Yellow
+          Get-DnsClientServerAddress -InterfaceAlias 'Ethernet*' | Format-Table
+          
+          # Configure TrustedHosts for CIM/WinRM
+          Write-Host "[2/2] Configuring TrustedHosts..." -ForegroundColor Cyan
+          Set-Item WSMan:\localhost\Client\TrustedHosts -Value '10.0.0.6,DC01,DC01.linkedin.local,*.linkedin.local' -Force
+          
+          Write-Host "✅ VM prepared for domain join" -ForegroundColor Green
+          EOFPS1
           
           az vm run-command invoke \
             --resource-group VAMDEVTEST \
             --name "$VM_NAME" \
             --command-id RunPowerShellScript \
-            --scripts "Set-DnsClientServerAddress -InterfaceAlias 'Ethernet*' -ServerAddresses 10.0.0.6,8.8.8.8; Get-DnsClientServerAddress -InterfaceAlias 'Ethernet*' | Format-Table" \
+            --scripts @/tmp/prepare-vm.ps1 \
             -o json | jq -r '.value[0].message'
           
-          echo "✅ DNS configured to use DC01 as primary DNS"
+          echo ""
+          echo "✅ DNS and TrustedHosts configured"
           echo ""
 
       - name: Promote to Domain Controller
@@ -131,15 +145,17 @@ jobs:
           
           # Create PowerShell script for DC promotion
           cat > /tmp/promote-dc.ps1 << 'EOFPS1'
-          param($DomainUser, $DomainPass, $SafePass)
+          param($DomainPass, $SafePass)
           
           try {
+            # Use full domain format: linkedin.local\vamdev
             $domainSecure = ConvertTo-SecureString $DomainPass -AsPlainText -Force
-            $domainCred = New-Object System.Management.Automation.PSCredential($DomainUser, $domainSecure)
+            $domainCred = New-Object System.Management.Automation.PSCredential("linkedin.local\vamdev", $domainSecure)
             
             $safeModeSecure = ConvertTo-SecureString $SafePass -AsPlainText -Force
             
-            Write-Host "Starting DC promotion..." -ForegroundColor Cyan
+            Write-Host "Starting DC promotion with user: linkedin.local\vamdev" -ForegroundColor Cyan
+            Write-Host ""
             
             Install-ADDSDomainController `
               -DomainName "linkedin.local" `
@@ -148,12 +164,16 @@ jobs:
               -SafeModeAdministratorPassword $safeModeSecure `
               -Force:$true `
               -NoRebootOnCompletion:$false `
-              -Confirm:$false
+              -Confirm:$false `
+              -ErrorAction Stop
               
-            Write-Host "DC promotion initiated" -ForegroundColor Green
+            Write-Host "✅ DC PROMOTION COMPLETED" -ForegroundColor Green
             
           } catch {
-            Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host "❌ DC PROMOTION ERROR: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "Full Error:" -ForegroundColor Red
+            Write-Host "$_" -ForegroundColor Red
             throw
           }
           EOFPS1
@@ -165,25 +185,35 @@ jobs:
             --name "$VM_NAME" \
             --command-id RunPowerShellScript \
             --scripts @/tmp/promote-dc.ps1 \
-            --parameters "DomainUser=$DOMAIN_ADMIN_USER" "DomainPass=$DOMAIN_ADMIN_PASS" "SafePass=$SAFE_MODE_PASS" \
+            --parameters "DomainPass=$DOMAIN_ADMIN_PASS" "SafePass=$SAFE_MODE_PASS" \
             -o json)
           
           echo ""
-          echo "Output:"
-          echo "$RESULT" | jq -r '.value[0].message'
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "DC Promotion Output:"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          OUTPUT_MSG=$(echo "$RESULT" | jq -r '.value[0].message')
+          echo "$OUTPUT_MSG"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
           
-          if echo "$RESULT" | grep -q "DC promotion initiated"; then
-            echo "✅ DC promotion command executed successfully!"
+          # Check for success (must appear BEFORE checking for errors)
+          if echo "$OUTPUT_MSG" | grep -q "✅ DC PROMOTION COMPLETED"; then
+            echo "✅✅✅ DC PROMOTION SUCCESSFUL! ✅✅✅"
             echo ""
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "  ✅ DC PROMOTION INITIATED!"
+            echo "  ✅ TestVM1300 ADDED TO linkedin.local"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             echo ""
-            echo "Server is now rebooting and completing promotion..."
             echo "Domain: linkedin.local"
             echo "New DC: $VM_NAME"
+            echo ""
+          elif echo "$OUTPUT_MSG" | grep -qi "❌ DC PROMOTION ERROR\|The operation failed\|Cannot complete"; then
+            echo "❌❌❌ DC PROMOTION FAILED! ❌❌❌"
+            echo ""
+            echo "Error found in output above"
+            exit 1
           else
-            echo "❌ DC promotion failed - check output above"
+            echo "⚠️  Unexpected output - check logs above"
             exit 1
           fi
