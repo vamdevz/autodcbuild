@@ -26,12 +26,16 @@ jobs:
         shell: pwsh
         run: |
           Write-Host "Installing PSWSMan for cross-platform WinRM support..." -ForegroundColor Cyan
-          Install-Module -Name PSWSMan -Scope CurrentUser -Force -AllowClobber
+          Install-Module -Name PSWSMan -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
+          
+          Write-Host "Verifying PSWSMan installation..." -ForegroundColor Cyan
+          Import-Module PSWSMan -Force -ErrorAction Stop
+          Get-Module PSWSMan
 
           Write-Host "Installing WSMan client..." -ForegroundColor Cyan
-          sudo $(which pwsh) -Command 'Import-Module PSWSMan; Install-WSMan'
+          sudo $(which pwsh) -Command 'Import-Module PSWSMan -Force; Install-WSMan'
 
-          Write-Host "PowerShell modules installed" -ForegroundColor Green
+          Write-Host "✅ PowerShell modules installed successfully" -ForegroundColor Green
 
       - name: Test connectivity to target DC
         shell: pwsh
