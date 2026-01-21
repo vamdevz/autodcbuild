@@ -242,12 +242,13 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
           
+          # Run health checks and save output
           az vm run-command invoke \
             --resource-group VAMDEVTEST \
             --name "$VM_NAME" \
             --command-id RunPowerShellScript \
             --scripts @v2-github-actions/scripts/post-promotion-checks.ps1 \
-            -o json | jq -r '.value[0].message'
+            -o json | jq -r '.value[0].message' | tee /tmp/health-check.log
 
       - name: Configure DNS Conditional Forwarders
         shell: bash
@@ -259,13 +260,49 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
           
+          # Run DNS configuration and save output
           az vm run-command invoke \
             --resource-group VAMDEVTEST \
             --name "$VM_NAME" \
             --command-id RunPowerShellScript \
             --scripts @v2-github-actions/scripts/configure-dns-forwarders.ps1 \
             --parameters "DomainType=local" \
-            -o json | jq -r '.value[0].message'
+            -o json | jq -r '.value[0].message' | tee /tmp/dns-config.log
+
+      - name: Generate Deployment Report
+        shell: bash
+        env:
+          VM_NAME: ${{ inputs.vm_name }}
+          VM_IP: ${{ inputs.target_dc }}
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  GENERATING DEPLOYMENT REPORT"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          
+          # Make script executable
+          chmod +x v2-github-actions/scripts/generate-report-from-logs.sh
+          
+          # Generate report from captured logs
+          ./v2-github-actions/scripts/generate-report-from-logs.sh \
+            "$VM_NAME" \
+            "linkedin.local" \
+            "$VM_IP" \
+            "/tmp/health-check.log" \
+            "/tmp/dns-config.log"
+          
+          echo ""
+          echo "✅ Deployment report generated"
+
+      - name: Commit Deployment Report
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          # Add and commit the report
+          git add deployment-reports/
+          git commit -m "chore: add deployment report for ${{ inputs.vm_name }}" || echo "No changes to commit"
+          git push || echo "Nothing to push"
 
       - name: Final Summary
         run: |
@@ -276,18 +313,17 @@ jobs:
           echo ""
           echo "VM Name: ${{ inputs.vm_name }}"
           echo "Domain: linkedin.local"
+          echo "IP Address: ${{ inputs.target_dc }}"
           echo ""
           echo "Automated Tasks Completed:"
           echo "  - AD DS Role installed"
           echo "  - DC promoted successfully"
           echo "  - Health checks passed"
           echo "  - DNS forwarders configured"
+          echo "  - Deployment report generated"
           echo ""
-          echo "Manual Tasks Required:"
-          echo "  - LDAP bind test from client"
-          echo "  - Azure Portal log verification"
-          echo "  - Agent installations (if needed)"
-          echo "  - Certificate enrollment via go/incerts"
+          echo "📄 Deployment Report:"
+          echo "   Check deployment-reports/ folder in the repository"
+          echo "   Report contains detailed DC health and configuration"
           echo ""
-          echo "See POST-PROMOTION-TASKS.md for details"
           echo "=========================================="
