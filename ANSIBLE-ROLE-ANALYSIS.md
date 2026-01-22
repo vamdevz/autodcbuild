@@ -8,6 +8,21 @@ Ansible is provided as an **alternative/additional** configuration management to
 
 ---
 
+## ⚠️ IMPORTANT: Terraform OR Ansible for DC Promotion (Not Both!)
+
+**For DC promotion, you choose ONE method:**
+
+| Method | How | When |
+|--------|-----|------|
+| **Terraform Only** | Set `promote_to_dc = true` | Default - 90% of deployments |
+| **Ansible Instead** | Set `promote_to_dc = false`, run playbook | Alternative approach |
+
+**For additional config (OUs, security), Ansible is used AFTER DC exists.**
+
+---
+
+---
+
 ## 🏗️ Actual Architecture in IaaC-v2-main
 
 ```
@@ -47,85 +62,141 @@ Ansible (Optional/Alternative)
 
 **Result**: Terraform **ALONE** can deploy a working DC!
 
-### 🔄 **Ansible Does (Optional - WHEN USED):**
+### 🔄 **Ansible Does (Optional - Choose Your Path):**
 
-| Task | File | When Used |
-|------|------|-----------|
-| Install AD DS Features | `playbooks/site.yml` | Alternative to Terraform |
-| Join Existing Domain | `roles/domain-controller/tasks/join-domain.yml` | Alternative to Terraform |
-| Promote to DC | `roles/domain-controller/tasks/join-domain.yml` lines 63-98 | Alternative to Terraform |
-| Security Hardening | `roles/security-hardening/` | Post-deployment |
-| Create OUs | `roles/domain-controller/tasks/post-install.yml` lines 22-44 | Post-deployment |
-| Password Policies | `roles/domain-controller/tasks/post-install.yml` lines 46-64 | Post-deployment |
-| AD Recycle Bin | `roles/domain-controller/tasks/post-install.yml` lines 5-20 | Post-deployment |
-| Audit Configuration | `roles/security-hardening/tasks/audit.yml` | Post-deployment |
-| Certificate Setup | `roles/security-hardening/tasks/certificates.yml` | Post-deployment |
-| Windows Security | `roles/security-hardening/tasks/windows-security.yml` | Post-deployment |
+**⚠️ IMPORTANT**: For DC promotion tasks, you choose **EITHER** Terraform **OR** Ansible, not both!
 
-**Result**: Ansible is for **advanced configuration AFTER** Terraform deploys the DC!
+| Task | File | Usage Option |
+|------|------|--------------|
+| **DC PROMOTION TASKS** (Choose ONE method) | | |
+| Install AD DS Features | `playbooks/site.yml` | **Instead of** Terraform (set `promote_to_dc=false`) |
+| Join Existing Domain | `roles/domain-controller/tasks/join-domain.yml` | **Instead of** Terraform (set `promote_to_dc=false`) |
+| Promote to DC | `roles/domain-controller/tasks/join-domain.yml` lines 63-98 | **Instead of** Terraform (set `promote_to_dc=false`) |
+| **ADDITIONAL CONFIG TASKS** (After DC exists) | | |
+| Security Hardening | `roles/security-hardening/` | **In addition to** Terraform (optional) |
+| Create OUs | `roles/domain-controller/tasks/post-install.yml` lines 22-44 | **In addition to** Terraform (optional) |
+| Password Policies | `roles/domain-controller/tasks/post-install.yml` lines 46-64 | **In addition to** Terraform (optional) |
+| AD Recycle Bin | `roles/domain-controller/tasks/post-install.yml` lines 5-20 | **In addition to** Terraform (optional) |
+| Audit Configuration | `roles/security-hardening/tasks/audit.yml` | **In addition to** Terraform (optional) |
+| Certificate Setup | `roles/security-hardening/tasks/certificates.yml` | **In addition to** Terraform (optional) |
+| Windows Security | `roles/security-hardening/tasks/windows-security.yml` | **In addition to** Terraform (optional) |
+
+**Result**: Ansible can be used **instead of** Terraform for DC promotion, **OR** for advanced config **after** Terraform!
 
 ---
 
 ## 🤔 Why Include Ansible?
 
-Your friend included Ansible for:
+Your friend included Ansible for **two distinct purposes**:
 
-### 1. **Post-Deployment Configuration**
+### **Use Case 1: Alternative to Terraform for DC Promotion**
+Some teams prefer Ansible over Terraform for:
+- Configuration management consistency
+- Existing Ansible expertise
+- Better PowerShell/WinRM integration
+- Ability to run playbooks separately for updates
+
+**In this case**: Set `promote_to_dc = false` and use Ansible **instead of** Terraform
+
+---
+
+### **Use Case 2: Post-Deployment Configuration (Main Purpose)**
 Things that are hard/impossible to do in Terraform:
 - Creating OUs, users, groups
 - Configuring password policies
 - Enabling AD Recycle Bin
 - Windows security hardening
 - Audit policy configuration
+- Certificate enrollment
+- Backup script creation
 
-### 2. **Flexibility**
-- Some teams prefer Ansible for configuration management
-- Can run Ansible playbooks separately for updates
-- Alternative to Terraform for DC promotion
+**In this case**: Use Terraform for DC promotion, then Ansible **in addition** for enterprise features
 
-### 3. **Complex Scenarios**
+---
+
+### **Use Case 3: Complex Scenarios**
+Advanced AD configurations:
 - Multi-domain forests
 - Trust relationships
 - Custom GPO configurations
 - Application-specific AD setup
+- Ongoing configuration management
 
 ---
 
-## 📋 Two Deployment Paths
+## 📋 Three Deployment Options
 
-### **Path A: Terraform Only** (Simpler, like autodcbuild)
+### **Option 1: Terraform ONLY** (Default - Most Common)
 ```bash
 cd terraform/environments/production
 terraform init
 terraform apply
 
+# Configuration:
+# promote_to_dc = true  (Terraform does DC promotion)
+
 # Result: 
 # - VMs created ✅
-# - DCs promoted ✅
+# - DCs promoted by Terraform ✅
 # - Basic health checks ✅
 # - Done! (~30 min)
 ```
 
-**Uses**: `azurerm_virtual_machine_run_command` (same as autodcbuild!)
+**Uses**: `azurerm_virtual_machine_run_command` (same as autodcbuild!)  
+**Ansible Used**: NO
 
-### **Path B: Terraform + Ansible** (Comprehensive)
+---
+
+### **Option 2: Terraform (Infra) + Ansible (DC Promotion)**
 ```bash
-# Step 1: Deploy infrastructure
+# Step 1: Deploy infrastructure only
 cd terraform/environments/production
 terraform init
 terraform apply
 
-# Step 2: Run Ansible for advanced config
+# Configuration:
+# promote_to_dc = false  (Terraform skips DC promotion)
+
+# Step 2: Use Ansible to promote DCs instead
 cd ../../ansible
 ansible-playbook -i inventory/hosts.yml playbooks/site.yml
 
 # Result:
-# - Everything from Path A ✅
-# - PLUS security hardening ✅
-# - PLUS AD objects (OUs, users) ✅
-# - PLUS advanced config ✅
+# - VMs created by Terraform ✅
+# - DCs promoted by Ansible ✅
+# - Done! (~40 min)
+```
+
+**Uses**: Ansible for DC promotion **instead of** Terraform run commands  
+**Ansible Used**: YES (for DC promotion)
+
+---
+
+### **Option 3: Terraform (All) + Ansible (Additional Config)**
+```bash
+# Step 1: Deploy infrastructure + promote DCs
+cd terraform/environments/production
+terraform init
+terraform apply
+
+# Configuration:
+# promote_to_dc = true  (Terraform does DC promotion)
+
+# Step 2: Run Ansible for advanced enterprise features
+cd ../../ansible
+ansible-playbook -i inventory/hosts.yml playbooks/site.yml --tags="security,post-install"
+
+# Result:
+# - VMs created by Terraform ✅
+# - DCs promoted by Terraform ✅
+# - PLUS security hardening by Ansible ✅
+# - PLUS AD objects (OUs, users) by Ansible ✅
+# - PLUS advanced config by Ansible ✅
 # - Done! (~50 min)
 ```
+
+**Uses**: Terraform for DC promotion, Ansible for additional enterprise features  
+**Ansible Used**: YES (for advanced config only)
 
 ---
 
@@ -193,21 +264,23 @@ ansible-playbook -i inventory/hosts.yml playbooks/site.yml
 
 ---
 
-## 📊 Comparison Table
+## 📊 Comparison Table (Updated)
 
-| Task | autodcbuild | IaaC-v2 (Terraform Only) | IaaC-v2 (+ Ansible) |
-|------|-------------|---------------------------|---------------------|
-| **Core Method** | GitHub Actions + az CLI | Terraform + az run-command | Terraform + Ansible |
-| **VM Creation** | ✅ | ✅ | ✅ |
-| **DC Promotion** | ✅ | ✅ | ✅ |
-| **Basic Health** | ✅ | ✅ | ✅ |
-| **DNS Forwarders** | ✅ 2 zones | ✅ 2 zones | ✅ 4 zones |
-| **Create OUs** | ❌ | ❌ | ✅ |
-| **Password Policy** | ❌ | ❌ | ✅ |
-| **Security Hardening** | ❌ | ❌ | ✅ |
-| **AD Recycle Bin** | ❌ | ❌ | ✅ |
-| **Backup Scripts** | ❌ | ❌ | ✅ |
-| **Time** | ~7 min | ~30 min | ~50 min |
+| Task | autodcbuild | IaaC-v2 Option 1<br>(Terraform Only) | IaaC-v2 Option 2<br>(Terraform+Ansible) | IaaC-v2 Option 3<br>(Both) |
+|------|-------------|---------------------------|---------------------|---------------------|
+| **Core Method** | GitHub Actions + az CLI | Terraform + run-command | Terraform (infra)<br>Ansible (DC) | Terraform (all)<br>+ Ansible (extras) |
+| **VM Creation** | ✅ GitHub Actions | ✅ Terraform | ✅ Terraform | ✅ Terraform |
+| **DC Promotion** | ✅ az run-command | ✅ Terraform run-command | ✅ Ansible playbook | ✅ Terraform run-command |
+| **Basic Health** | ✅ | ✅ | ✅ | ✅ |
+| **DNS Forwarders** | ✅ 2 zones | ✅ 2 zones | ✅ 2 zones | ✅ 4 zones |
+| **Create OUs** | ❌ | ❌ | ❌ | ✅ Ansible |
+| **Password Policy** | ❌ | ❌ | ❌ | ✅ Ansible |
+| **Security Hardening** | ❌ | ❌ | ❌ | ✅ Ansible |
+| **AD Recycle Bin** | ❌ | ❌ | ❌ | ✅ Ansible |
+| **Backup Scripts** | ❌ | ❌ | ❌ | ✅ Ansible |
+| **Time** | ~7 min | ~30 min | ~40 min | ~50 min |
+| **Ansible for DC?** | No | No | **Yes (instead)** | No |
+| **Ansible for Config?** | No | No | No | **Yes (additional)** |
 
 ---
 
@@ -260,52 +333,81 @@ IaaC-v2-main: Terraform → azurerm_virtual_machine_run_command → PowerShell
 
 ## 📝 Summary
 
-### **In IaaC-v2-main:**
+### **Three Ways to Use IaaC-v2-main:**
 
 ```
-Terraform = Core DC Deployment (REQUIRED)
-    ↓
-    Creates VMs + Promotes to DC
-    ↓
-    Working Domain Controller! ✅
+Option 1 (Default - 90% of users):
+  Terraform → Creates VMs + Promotes DC → Done! ✅
+  Time: 30 min | Ansible: NOT used
 
-Ansible = Advanced Configuration (OPTIONAL)
-    ↓
-    OUs + Users + Security + Policies
-    ↓
-    Enterprise-Ready DC! ✅✅
+Option 2 (Alternative method):
+  Terraform → Creates VMs only
+       ↓
+  Ansible → Promotes DC → Done! ✅
+  Time: 40 min | Ansible: Used INSTEAD of Terraform run-command
+
+Option 3 (Comprehensive):
+  Terraform → Creates VMs + Promotes DC ✅
+       ↓
+  Ansible → Adds enterprise features ✅✅
+  Time: 50 min | Ansible: Used IN ADDITION to Terraform
 ```
+
+### **Key Principle:**
+
+**For DC Promotion**: Choose **ONE** method (Terraform OR Ansible)  
+**For Additional Config**: Use Ansible **AFTER** DC is promoted
 
 ### **Compared to autodcbuild:**
 
 ```
 autodcbuild:
   GitHub Actions → az vm run-command → DC ready in 7 min
+  (Assumes existing infrastructure)
 
-IaaC-v2-main (Terraform only):
+IaaC-v2-main Option 1:
   Terraform → azurerm run-command → DC ready in 30 min
+  (Creates full infrastructure + DC)
   
-IaaC-v2-main (Terraform + Ansible):
-  Terraform → DC → Ansible → Enterprise DC in 50 min
+IaaC-v2-main Option 2:
+  Terraform + Ansible → DC ready in 40 min
+  (Creates infra via Terraform, DC via Ansible)
+
+IaaC-v2-main Option 3:
+  Terraform + Ansible → Enterprise DC in 50 min
+  (Terraform for DC + Ansible for advanced features)
 ```
 
 ---
 
 ## 🏆 Verdict
 
-**Ansible in IaaC-v2-main is for**:
-- Post-deployment configuration
-- Advanced AD setup
-- Security hardening
-- Ongoing management
+### **Ansible's Role in IaaC-v2-main:**
 
-**It's NOT required for basic DC promotion!**
+1. **For DC Promotion**: **OPTIONAL** - You can use Ansible **instead of** Terraform run commands
+   - Set `promote_to_dc = false` to use this approach
+   - Most people (90%) don't use this - they let Terraform do it
 
-Your friend's project gives you **flexibility**:
-- Use Terraform only for speed
-- Add Ansible when you need advanced features
+2. **For Advanced Config**: **OPTIONAL** - You can use Ansible **in addition to** Terraform
+   - OUs, users, groups, policies, security hardening
+   - This is the main reason Ansible is included
 
-**Your autodcbuild project achieves the same core result (working DC) in 7 minutes vs IaaC-v2's 30 minutes (Terraform only) or 50 minutes (Terraform + Ansible)!** 🚀
+### **Clear Answer to "Do We Use Both?"**
+
+**For DC Promotion**: **NO** - Choose ONE method (Terraform OR Ansible)  
+**For Additional Config**: **YES** - Ansible adds features after Terraform completes
+
+### **Bottom Line:**
+
+| Project | Method | DC Promotion Time | Best For |
+|---------|--------|-------------------|----------|
+| **autodcbuild** | GitHub Actions + az CLI | **7 min** | Lab/Quick testing |
+| **IaaC-v2 (Option 1)** | Terraform only | 30 min | Production infrastructure |
+| **IaaC-v2 (Option 2)** | Terraform + Ansible (alt) | 40 min | Teams who prefer Ansible |
+| **IaaC-v2 (Option 3)** | Terraform + Ansible (both) | 50 min | Enterprise with all features |
+
+**Your autodcbuild project is fastest** because it assumes existing infrastructure!  
+**IaaC-v2-main is more comprehensive** because it creates everything from scratch! 🚀
 
 ---
 
